@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TickEvo</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <h1>TickEvo Ticket Evolution System</h1>
+        <div id="turn-info">Current Turn: <span id="current-turn"></span></div>
+        <button id="end-turn-btn">End Turn</button>
+        <div id="action-area">
+            <h2>Perform Action</h2>
+            <select id="action-select">
+                <option value="view">View Ticket</option>
+                <option value="review">Review Ticket</option>
+                <option value="progress">Progress Ticket</option>
+                <option value="solve">Solve Ticket</option>
+            </select>
+            <button id="perform-action-btn">Perform Action</button>
+        </div>
+        <div id="chat-area">
+            <h2>Chat</h2>
+            <div id="messages"></div>
+            <input type="text" id="message-input" placeholder="Type a message...">
+            <button id="send-message-btn">Send</button>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

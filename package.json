@@ -1,0 +1,16 @@
+{
+  "name": "tickevo",
+  "version": "1.0.0",
+  "description": "Turn-based gamified ticket evolution web application",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Karlo Skokic",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2",
+    "firebase": "^11.5.0",
+    "firebase-admin": "^13.2.0"
+  }
+}
