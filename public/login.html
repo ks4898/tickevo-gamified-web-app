@@ -25,6 +25,8 @@
     <script>
         let token;
         let currentUserId;
+        let messageInterval;
+        let turnInterval;
 
         function login() {
             const username = $('#username').val();
@@ -41,6 +43,8 @@
                     $('#chat-room').show();
                     getMessages();
                     checkTurn();
+                    messageInterval = setInterval(getMessages, 5000);
+                    turnInterval = setInterval(checkTurn, 5000);
                 },
                 error: function(xhr) {
                     alert('Login failed: ' + xhr.responseJSON.error);
@@ -79,7 +83,7 @@
                     $('#messages').html(messagesHtml);
                 },
                 error: function(xhr) {
-                    alert('Failed to get messages: ' + xhr.responseJSON.error);
+                    console.error('Failed to get messages:', xhr.responseJSON.error);
                 }
             });
         }
@@ -99,13 +103,10 @@
                     }
                 },
                 error: function(xhr) {
-                    alert('Failed to check turn: ' + xhr.responseJSON.error);
+                    console.error('Failed to check turn:', xhr.responseJSON.error);
                 }
             });
         }
-
-        setInterval(getMessages, 5000);
-        setInterval(checkTurn, 5000);
     </script>
 </body>
 </html>
