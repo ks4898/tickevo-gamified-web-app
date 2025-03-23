@@ -27,6 +27,7 @@
         let currentUserId;
         let messageInterval;
         let turnInterval;
+        let lastDisplayedMessageId = null;
 
         function login() {
             const username = $('#username').val();
@@ -43,7 +44,7 @@
                     $('#chat-room').show();
                     getMessages();
                     checkTurn();
-                    messageInterval = setInterval(getMessages, 5000);
+                    messageInterval = setInterval(getMessages, 2000);
                     turnInterval = setInterval(checkTurn, 2000);
                 },
                 error: function(xhr) {
@@ -81,6 +82,9 @@
                         `<p><strong>${msg.username}</strong>: ${msg.message}</p>`
                     ).join('');
                     $('#messages').html(messagesHtml);
+                    if (messages.length > 0) {
+                        lastDisplayedMessageId = messages[messages.length - 1].id;
+                    }
                 },
                 error: function(xhr) {
                     console.error('Failed to get messages:', xhr.responseJSON.error);
