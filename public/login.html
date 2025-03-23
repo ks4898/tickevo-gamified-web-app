@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TickEvo - Login</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div id="login-form">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <p>Don't have an account? <a href="signup.html">Sign up</a></p>
+    </div>
+
+    <div id="chat-room" style="display: none;">
+        <h2>Chat Room</h2>
+        <div id="messages"></div>
+        <input type="text" id="message-input" placeholder="Type a message...">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+        let token;
+
+        function login() {
+            const username = $('#username').val();
+            const password = $('#password').val();
+            $.ajax({
+                url: '/api/login',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ username, password }),
+                success: function(response) {
+                    token = response.token;
+                    $('#login-form').hide();
+                    $('#chat-room').show();
+                    getMessages();
+                },
+                error: function(xhr) {
+                    alert('Login failed: ' + xhr.responseJSON.error);
+                }
+            });
+        }
+
+        function sendMessage() {
+            const message = $('#message-input').val();
+            $.ajax({
+                url: '/api/send-message',
+                method: 'POST',
+                headers: { 'Authorization': token },
+                contentType: 'application/json',
+                data: JSON.stringify({ message }),
+                success: function() {
+                    $('#message-input').val('');
+                    getMessages();
+                },
+                error: function(xhr) {
+                    alert('Failed to send message: ' + xhr.responseJSON.error);
+                }
+            });
+        }
+
+        function getMessages() {
+            $.ajax({
+                url: '/api/get-messages',
+                method: 'GET',
+                headers: { 'Authorization': token },
+                success: function(messages) {
+                    const messagesHtml = messages.map(msg => 
+                        `<p><strong>${msg.userId}</strong>: ${msg.message}</p>`
+                    ).join('');
+                    $('#messages').html(messagesHtml);
+                },
+                error: function(xhr) {
+                    alert('Failed to get messages: ' + xhr.responseJSON.error);
+                }
+            });
+        }
+
+        setInterval(getMessages, 5000);
+    </script>
+</body>
+</html>
