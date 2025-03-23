@@ -1,5 +1,5 @@
 const express = require('express'); // express.js
-const admin = require('firebase-admin'); // firestore
+const admin = require('firebase-admin'); // firebase
 const cors = require('cors'); // cors
 const jwt = require('jsonwebtoken'); // JWT
 const bcrypt = require('bcrypt'); // bcrypt hash
@@ -23,6 +23,30 @@ const JWT_SECRET = '70724d8d89b3766b4b45cf61838142419d7ab90c7f6556577e94bbb9fa03
 
 // current turn tracking
 let currentTurn = null;
+let userQueue = [];
+
+// signup endpoint
+app.post('/api/signup', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const userDoc = await db.collection('users').where('username', '==', username).get();
+        if (!userDoc.empty) {
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = await db.collection('users').add({
+            username,
+            password: hashedPassword,
+            exp: 0,
+            ticketTokens: 0,
+            badges: []
+        });
+        res.json({ success: true, userId: newUser.id });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 // login endpoint
 app.post('/api/login', async (req, res) => {
@@ -37,14 +61,17 @@ app.post('/api/login', async (req, res) => {
         if (!passwordMatch) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
-        const token = jwt.sign({ userId: userDoc.docs[0].id }, JWT_SECRET, { expiresIn: '1h' });
+        const userId = userDoc.docs[0].id;
+        const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
 
-        // init currentTurn if null
+        if (!userQueue.includes(userId)) {   // add user to queue if no in queue already
+            userQueue.push(userId);
+        }
         if (currentTurn === null) {
-            currentTurn = userDoc.docs[0].id;
+            currentTurn = userId;
         }
 
-        res.json({ token, userId: userDoc.docs[0].id });
+        res.json({ token, userId });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -63,7 +90,7 @@ const verifyToken = (req, res, next) => {
 
 // get current turn
 app.get('/api/current-turn', verifyToken, (req, res) => {
-    res.json({ currentTurn });
+    res.json({ currentTurn, isYourTurn: currentTurn === req.userId });
 });
 
 // send chat message
@@ -82,18 +109,15 @@ app.post('/api/send-message', verifyToken, async (req, res) => {
             timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // fetch all users and update currentTurn
-        const usersSnapshot = await db.collection('users').get();
-        const userIds = usersSnapshot.docs.map(doc => doc.id);
-        const currentIndex = userIds.indexOf(currentTurn);
-        currentTurn = userIds[(currentIndex + 1) % userIds.length];
+        // update turn
+        const currentIndex = userQueue.indexOf(currentTurn);
+        currentTurn = userQueue[(currentIndex + 1) % userQueue.length];
 
         res.json({ success: true, nextTurn: currentTurn });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
-
 
 // get chat messages
 app.get('/api/get-messages', verifyToken, async (req, res) => {
@@ -106,13 +130,13 @@ app.get('/api/get-messages', verifyToken, async (req, res) => {
             id: doc.id,
             ...doc.data()
         }));
-        res.json(messages);
+        res.json(messages.reverse());
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// function to add sample data
+// add sample data
 async function addSampleData() {
     const users = [
         { username: 'user1', password: 'password1', exp: 100, ticketTokens: 50 },
@@ -146,7 +170,7 @@ async function addSampleData() {
 
 //addSampleData(); // call function to add sample data
 
-// start the server
+// start server
 app.listen(port, () => {
     console.log(`TickEvo server running on port ${port}`);
 });

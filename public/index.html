@@ -16,13 +16,17 @@
 
     <div id="chat-room" style="display: none;">
         <h2>Chat Room</h2>
+        <div id="turn-info"></div>
         <div id="messages"></div>
         <input type="text" id="message-input" placeholder="Type a message...">
-        <button onclick="sendMessage()">Send</button>
+        <button onclick="sendMessage()" id="send-button">Send</button>
     </div>
 
     <script>
         let token;
+        let currentUserId;
+        let messageInterval;
+        let turnInterval;
 
         function login() {
             const username = $('#username').val();
@@ -34,9 +38,13 @@
                 data: JSON.stringify({ username, password }),
                 success: function(response) {
                     token = response.token;
+                    currentUserId = response.userId;
                     $('#login-form').hide();
                     $('#chat-room').show();
                     getMessages();
+                    checkTurn();
+                    messageInterval = setInterval(getMessages, 5000);
+                    turnInterval = setInterval(checkTurn, 2000);
                 },
                 error: function(xhr) {
                     alert('Login failed: ' + xhr.responseJSON.error);
@@ -52,9 +60,10 @@
                 headers: { 'Authorization': token },
                 contentType: 'application/json',
                 data: JSON.stringify({ message }),
-                success: function() {
+                success: function(response) {
                     $('#message-input').val('');
                     getMessages();
+                    checkTurn();
                 },
                 error: function(xhr) {
                     alert('Failed to send message: ' + xhr.responseJSON.error);
@@ -69,17 +78,35 @@
                 headers: { 'Authorization': token },
                 success: function(messages) {
                     const messagesHtml = messages.map(msg => 
-                        `<p><strong>${msg.userId}</strong>: ${msg.message}</p>`
+                        `<p><strong>${msg.username}</strong>: ${msg.message}</p>`
                     ).join('');
                     $('#messages').html(messagesHtml);
                 },
                 error: function(xhr) {
-                    alert('Failed to get messages: ' + xhr.responseJSON.error);
+                    console.error('Failed to get messages:', xhr.responseJSON.error);
                 }
             });
         }
 
-        setInterval(getMessages, 5000);
+        function checkTurn() {
+            $.ajax({
+                url: '/api/current-turn',
+                method: 'GET',
+                headers: { 'Authorization': token },
+                success: function(response) {
+                    if (response.isYourTurn) {
+                        $('#turn-info').text("It's your turn!");
+                        $('#message-input, #send-button').prop('disabled', false);
+                    } else {
+                        $('#turn-info').text("Waiting for your turn...");
+                        $('#message-input, #send-button').prop('disabled', true);
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Failed to check turn:', xhr.responseJSON.error);
+                }
+            });
+        }
     </script>
 </body>
 </html>
