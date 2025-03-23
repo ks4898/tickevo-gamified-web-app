@@ -120,7 +120,7 @@ app.post('/api/send-message', verifyToken, async (req, res) => {
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
     
-    // Update turn
+    // update turn
     const currentIndex = userQueue.indexOf(currentTurn);
     const nextTurn = userQueue[(currentIndex + 1) % userQueue.length];
     await db.collection('tickets').doc('turnInfo').update({ 
