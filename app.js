@@ -13,7 +13,7 @@ app.use(express.static('public'));
 // init Firebase admin SDK
 const serviceAccount = require('./tickevo-ticket-evolution-firebase-adminsdk-fbsvc-6e628ddddb.json');
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount)
 });
 
 const db = admin.firestore();
@@ -26,78 +26,84 @@ let currentTurn = null;
 
 // login endpoint
 app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const userDoc = await db.collection('users').where('username', '==', username).get();
-    if (userDoc.empty) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    const { username, password } = req.body;
+    try {
+        const userDoc = await db.collection('users').where('username', '==', username).get();
+        if (userDoc.empty) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        const user = userDoc.docs[0].data();
+        const passwordMatch = await bcrypt.compare(password, user.password);
+        if (!passwordMatch) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        const token = jwt.sign({ userId: userDoc.docs[0].id }, JWT_SECRET, { expiresIn: '1h' });
+
+        // init currentTurn if null
+        if (currentTurn === null) {
+            currentTurn = userDoc.docs[0].id;
+        }
+
+        res.json({ token, userId: userDoc.docs[0].id });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
-    const user = userDoc.docs[0].data();
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    const token = jwt.sign({ userId: userDoc.docs[0].id }, JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, userId: userDoc.docs[0].id });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
 // middleware to verify JWT token
 const verifyToken = (req, res, next) => {
-  const token = req.headers['authorization'];
-  if (!token) return res.status(403).json({ error: 'No token provided' });
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(401).json({ error: 'Unauthorized' });
-    req.userId = decoded.userId;
-    next();
-  });
+    const token = req.headers['authorization'];
+    if (!token) return res.status(403).json({ error: 'No token provided' });
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) return res.status(401).json({ error: 'Unauthorized' });
+        req.userId = decoded.userId;
+        next();
+    });
 };
 
 // get current turn
 app.get('/api/current-turn', verifyToken, (req, res) => {
-  res.json({ currentTurn });
+    res.json({ currentTurn });
 });
 
 // send chat message
 app.post('/api/send-message', verifyToken, async (req, res) => {
-  const { message } = req.body;
-  if (currentTurn !== req.userId) {
-    return res.status(403).json({ error: 'Not your turn' });
-  }
-  try {
-    await db.collection('messages').add({
-      userId: req.userId,
-      message,
-      timestamp: admin.firestore.FieldValue.serverTimestamp()
-    });
-    // Switch turn to the next user
-    const users = await db.collection('users').get();
-    const userIds = users.docs.map(doc => doc.id);
-    const currentIndex = userIds.indexOf(currentTurn);
-    currentTurn = userIds[(currentIndex + 1) % userIds.length];
-    res.json({ success: true, nextTurn: currentTurn });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    const { message } = req.body;
+    if (currentTurn !== req.userId) {
+        return res.status(403).json({ error: 'Not your turn' });
+    }
+    try {
+        await db.collection('messages').add({
+            userId: req.userId,
+            message,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        // Switch turn to the next user
+        const users = await db.collection('users').get();
+        const userIds = users.docs.map(doc => doc.id);
+        const currentIndex = userIds.indexOf(currentTurn);
+        currentTurn = userIds[(currentIndex + 1) % userIds.length];
+        res.json({ success: true, nextTurn: currentTurn });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // get chat messages
 app.get('/api/get-messages', verifyToken, async (req, res) => {
-  try {
-    const messagesSnapshot = await db.collection('messages')
-      .orderBy('timestamp', 'desc')
-      .limit(20)
-      .get();
-    const messages = messagesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    try {
+        const messagesSnapshot = await db.collection('messages')
+            .orderBy('timestamp', 'desc')
+            .limit(20)
+            .get();
+        const messages = messagesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        res.json(messages);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // function to add sample data
@@ -132,10 +138,9 @@ async function addSampleData() {
     console.log('Sample data added successfully');
 }
 
-addSampleData(); // call function to add sample data
+//addSampleData(); // call function to add sample data
 
 // start the server
 app.listen(port, () => {
     console.log(`TickEvo server running on port ${port}`);
-  });
-  
+});
