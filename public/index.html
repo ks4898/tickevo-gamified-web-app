@@ -3,31 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TickEvo</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>TickEvo - Login and Chat</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
-    <div id="app">
-        <h1>TickEvo Ticket Evolution System</h1>
-        <div id="turn-info">Current Turn: <span id="current-turn"></span></div>
-        <button id="end-turn-btn">End Turn</button>
-        <div id="action-area">
-            <h2>Perform Action</h2>
-            <select id="action-select">
-                <option value="view">View Ticket</option>
-                <option value="review">Review Ticket</option>
-                <option value="progress">Progress Ticket</option>
-                <option value="solve">Solve Ticket</option>
-            </select>
-            <button id="perform-action-btn">Perform Action</button>
-        </div>
-        <div id="chat-area">
-            <h2>Chat</h2>
-            <div id="messages"></div>
-            <input type="text" id="message-input" placeholder="Type a message...">
-            <button id="send-message-btn">Send</button>
-        </div>
+    <div id="login-form">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
     </div>
-    <script src="app.js"></script>
+
+    <div id="chat-room" style="display: none;">
+        <h2>Chat Room</h2>
+        <div id="messages"></div>
+        <input type="text" id="message-input" placeholder="Type a message...">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+        let token;
+
+        function login() {
+            const username = $('#username').val();
+            const password = $('#password').val();
+            $.ajax({
+                url: '/api/login',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ username, password }),
+                success: function(response) {
+                    token = response.token;
+                    $('#login-form').hide();
+                    $('#chat-room').show();
+                    getMessages();
+                },
+                error: function(xhr) {
+                    alert('Login failed: ' + xhr.responseJSON.error);
+                }
+            });
+        }
+
+        function sendMessage() {
+            const message = $('#message-input').val();
+            $.ajax({
+                url: '/api/send-message',
+                method: 'POST',
+                headers: { 'Authorization': token },
+                contentType: 'application/json',
+                data: JSON.stringify({ message }),
+                success: function() {
+                    $('#message-input').val('');
+                    getMessages();
+                },
+                error: function(xhr) {
+                    alert('Failed to send message: ' + xhr.responseJSON.error);
+                }
+            });
+        }
+
+        function getMessages() {
+            $.ajax({
+                url: '/api/get-messages',
+                method: 'GET',
+                headers: { 'Authorization': token },
+                success: function(messages) {
+                    const messagesHtml = messages.map(msg => 
+                        `<p><strong>${msg.userId}</strong>: ${msg.message}</p>`
+                    ).join('');
+                    $('#messages').html(messagesHtml);
+                },
+                error: function(xhr) {
+                    alert('Failed to get messages: ' + xhr.responseJSON.error);
+                }
+            });
+        }
+
+        setInterval(getMessages, 5000);
+    </script>
 </body>
 </html>
