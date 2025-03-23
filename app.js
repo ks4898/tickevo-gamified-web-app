@@ -70,24 +70,28 @@ app.get('/api/current-turn', verifyToken, (req, res) => {
 app.post('/api/send-message', verifyToken, async (req, res) => {
     const { message } = req.body;
     if (currentTurn !== req.userId) {
-        return res.status(403).json({ error: 'Not your turn' });
+      return res.status(403).json({ error: 'Not your turn' });
     }
     try {
-        await db.collection('messages').add({
-            userId: req.userId,
-            message,
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
-        });
-        // Switch turn to the next user
-        const users = await db.collection('users').get();
-        const userIds = users.docs.map(doc => doc.id);
-        const currentIndex = userIds.indexOf(currentTurn);
-        currentTurn = userIds[(currentIndex + 1) % userIds.length];
-        res.json({ success: true, nextTurn: currentTurn });
+      const userDoc = await db.collection('users').doc(req.userId).get();
+      const username = userDoc.data().username;
+      await db.collection('messages').add({
+        userId: req.userId,
+        username: username,
+        message,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      // switch turn to the next user
+      const users = await db.collection('users').get();
+      const userIds = users.docs.map(doc => doc.id);
+      const currentIndex = userIds.indexOf(currentTurn);
+      currentTurn = userIds[(currentIndex + 1) % userIds.length];
+      res.json({ success: true, nextTurn: currentTurn });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message });
     }
-});
+  });
+  
 
 // get chat messages
 app.get('/api/get-messages', verifyToken, async (req, res) => {
