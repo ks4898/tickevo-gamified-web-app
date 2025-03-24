@@ -12,7 +12,7 @@
     <a href="create-ticket.html">Create New Ticket</a>
 
     <script>
-        $(document).ready(function() {
+        function loadTickets() {
             const token = localStorage.getItem('token');
             if (!token) {
                 window.location.href = 'index.html';
@@ -24,15 +24,9 @@
                 method: 'GET',
                 headers: { 'Authorization': token },
                 success: function(tickets) {
-                    const sortedTickets = tickets.sort((a, b) => {
-                        if (a.priority === b.priority) {
-                            return new Date(a.creationDate) - new Date(b.creationDate);
-                        }
-                        return a.priority === 'High' ? -1 : 1;
-                    });
-
                     const ticketList = $('#ticket-list');
-                    sortedTickets.forEach(ticket => {
+                    ticketList.empty();
+                    tickets.forEach(ticket => {
                         ticketList.append(`
                             <li>
                                 <a href="ticket-chat.html?id=${ticket.id}">
@@ -49,10 +43,14 @@
                         window.location.href = 'index.html';
                     } else {
                         alert('Failed to fetch tickets: ' + xhr.responseJSON.error);
-                        console.log(xhr.responseJSON.error);
                     }
                 }
             });
+        }
+
+        $(document).ready(function() {
+            loadTickets();
+            setInterval(loadTickets, 30000); // Refresh every 30 seconds
         });
     </script>
 </body>

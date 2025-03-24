@@ -42,7 +42,7 @@
                         if (ticket.stage === 'Unseen' && ticket.createdBy !== currentUsername) {
                             updateTicketStage('Pending Review');
                         }
-                        checkTurn(ticket.currentTurn);
+                        checkTurn(ticket);
                         loadMessages();
                     },
                     error: function(xhr) {
@@ -72,14 +72,31 @@
             });
         }
 
-        function checkTurn(currentTurn) {
-            if (!currentTurn) {
+        function checkTurn(ticket) {
+            if (ticket.currentTurn === currentUserId) {
                 $('#turn-info').text("It's your turn!");
                 $('#message-input, #send-button').prop('disabled', false);
             } else {
                 $('#turn-info').text("Waiting for your turn...");
                 $('#message-input, #send-button').prop('disabled', true);
+                if (!ticket.queue.includes(currentUserId) && currentUserId !== ticket.createdBy) {
+                    joinQueue();
+                }
             }
+        }
+
+        function joinQueue() {
+            $.ajax({
+                url: `/api/tickets/${currentTicketId}/join-queue`,
+                method: 'POST',
+                headers: { 'Authorization': token },
+                success: function() {
+                    loadTicketInfo();
+                },
+                error: function(xhr) {
+                    console.error('Failed to join queue:', xhr.responseJSON.error);
+                }
+            });
         }
 
         function sendMessage() {
@@ -95,15 +112,12 @@
                     loadMessages();
                     if (response.stageUpdated) {
                         loadTicketInfo();
+                    } else {
+                        checkTurn({ currentTurn: response.nextTurn });
                     }
                 },
                 error: function(xhr) {
-                    if (xhr.status === 401) {
-                        alert('Session expired. Please log in again.');
-                        window.location.href = 'index.html';
-                    } else {
-                        alert('Failed to send message: ' + xhr.responseJSON.error);
-                    }
+                    alert('Failed to send message: ' + xhr.responseJSON.error);
                 }
             });
         }
@@ -121,10 +135,6 @@
                 },
                 error: function(xhr) {
                     console.error('Failed to load messages:', xhr.responseJSON.error);
-                    if (xhr.status === 401) {
-                        alert('Session expired. Please log in again.');
-                        window.location.href = 'index.html';
-                    }
                 }
             });
         }

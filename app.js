@@ -32,6 +32,27 @@ const verifyToken = (req, res, next) => {
   });
 };
 
+// Login endpoint
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const userDoc = await db.collection('users').where('username', '==', username).get();
+    if (userDoc.empty) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const user = userDoc.docs[0].data();
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const userId = userDoc.docs[0].id;
+    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token, userId, username: user.username });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Signup endpoint
 app.post('/api/signup', async (req, res) => {
   const { username, password } = req.body;
@@ -54,28 +75,6 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
-
-// Login endpoint
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const userDoc = await db.collection('users').where('username', '==', username).get();
-    if (userDoc.empty) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    const user = userDoc.docs[0].data();
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    const userId = userDoc.docs[0].id;
-    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, userId, username: user.username });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Create a new ticket
 app.post('/api/create-ticket', verifyToken, async (req, res) => {
   const { title, description, priority } = req.body;
@@ -90,18 +89,9 @@ app.post('/api/create-ticket', verifyToken, async (req, res) => {
       lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
       stage: 'Unseen',
       priority: priority || 'Normal',
-      currentTurn: null
+      currentTurn: null,
+      queue: []
     });
-
-    // Add ticket action
-    await db.collection('ticketActions').add({
-      userId: req.userId,
-      ticketId: newTicket.id,
-      actionType: 'Create',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      details: 'Ticket created'
-    });
-
     res.json({ success: true, ticketId: newTicket.id });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -111,14 +101,20 @@ app.post('/api/create-ticket', verifyToken, async (req, res) => {
 // Get all tickets
 app.get('/api/tickets', verifyToken, async (req, res) => {
   try {
-    const ticketsSnapshot = await db.collection('tickets')
-      .orderBy('priority', 'desc')
-      .orderBy('creationDate', 'asc')
-      .get();
+    const ticketsSnapshot = await db.collection('tickets').get();
     const tickets = ticketsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // Sort tickets by priority (High first) and then alphabetically by title
+    tickets.sort((a, b) => {
+      if (a.priority === b.priority) {
+        return a.title.localeCompare(b.title);
+      }
+      return a.priority === 'High' ? -1 : 1;
+    });
+    
     res.json(tickets);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -136,26 +132,47 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       id: ticketDoc.id,
       ...ticketDoc.data()
     };
-
-    // Update stage if necessary
-    if (ticket.stage === 'Unseen' && ticket.createdBy !== req.userId) {
-      await db.collection('tickets').doc(req.params.ticketId).update({
-        stage: 'Pending Review',
-        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
-      });
-      ticket.stage = 'Pending Review';
-
-      // Add ticket action
-      await db.collection('ticketActions').add({
-        userId: req.userId,
-        ticketId: req.params.ticketId,
-        actionType: 'View',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        details: 'Ticket viewed for the first time'
-      });
-    }
-
     res.json(ticket);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update ticket stage
+app.put('/api/tickets/:ticketId/stage', verifyToken, async (req, res) => {
+  const { stage } = req.body;
+  try {
+    await db.collection('tickets').doc(req.params.ticketId).update({
+      stage,
+      lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Join ticket queue
+app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
+  try {
+    const ticketRef = db.collection('tickets').doc(req.params.ticketId);
+    await db.runTransaction(async (transaction) => {
+      const ticketDoc = await transaction.get(ticketRef);
+      if (!ticketDoc.exists) {
+        throw new Error('Ticket not found');
+      }
+      const ticketData = ticketDoc.data();
+      let queue = ticketData.queue || [];
+      if (!queue.includes(req.userId) && req.userId !== ticketData.createdBy) {
+        queue.push(req.userId);
+        if (!ticketData.currentTurn) {
+          transaction.update(ticketRef, { queue, currentTurn: req.userId });
+        } else {
+          transaction.update(ticketRef, { queue });
+        }
+      }
+    });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -166,46 +183,51 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   const { message } = req.body;
   const ticketId = req.params.ticketId;
   try {
-    const ticketDoc = await db.collection('tickets').doc(ticketId).get();
-    const ticketData = ticketDoc.data();
-
-    if (ticketData.currentTurn && ticketData.currentTurn !== req.userId) {
-      return res.status(403).json({ error: 'Not your turn' });
-    }
-
-    const userDoc = await db.collection('users').doc(req.userId).get();
-    const username = userDoc.data().username;
-
-    await db.collection('tickets').doc(ticketId).collection('messages').add({
-      userId: req.userId,
-      username: username,
-      message,
-      timestamp: admin.firestore.FieldValue.serverTimestamp()
-    });
-
+    const ticketRef = db.collection('tickets').doc(ticketId);
     let stageUpdated = false;
-    if (ticketData.stage === 'Pending Review' && ticketData.createdBy !== username) {
-      await db.collection('tickets').doc(ticketId).update({
-        stage: 'Under Review',
+    let nextTurn = null;
+
+    await db.runTransaction(async (transaction) => {
+      const ticketDoc = await transaction.get(ticketRef);
+      if (!ticketDoc.exists) {
+        throw new Error('Ticket not found');
+      }
+      const ticketData = ticketDoc.data();
+      
+      if (ticketData.currentTurn !== req.userId) {
+        throw new Error('Not your turn');
+      }
+
+      const userDoc = await db.collection('users').doc(req.userId).get();
+      const username = userDoc.data().username;
+
+      // Add message
+      const messageRef = ticketRef.collection('messages').doc();
+      transaction.set(messageRef, {
+        userId: req.userId,
+        username: username,
+        message,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Update stage if necessary
+      if (ticketData.stage === 'Pending Review' && ticketData.createdBy !== username) {
+        transaction.update(ticketRef, { stage: 'Under Review' });
+        stageUpdated = true;
+      }
+
+      // Update turn
+      let queue = ticketData.queue.filter(id => id !== req.userId);
+      if (queue.length > 0) {
+        nextTurn = queue[0];
+      } else if (ticketData.createdBy !== req.userId) {
+        nextTurn = ticketData.createdBy;
+      }
+      transaction.update(ticketRef, { 
+        currentTurn: nextTurn,
+        queue: queue,
         lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
       });
-      stageUpdated = true;
-
-      // Add ticket action
-      await db.collection('ticketActions').add({
-        userId: req.userId,
-        ticketId: ticketId,
-        actionType: 'Review',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        details: 'Ticket moved to Under Review stage'
-      });
-    }
-
-    // Update turn
-    const nextTurn = null; // Reset turn after each message
-    await db.collection('tickets').doc(ticketId).update({
-      currentTurn: nextTurn,
-      lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
     });
 
     res.json({ success: true, nextTurn, stageUpdated });
@@ -317,7 +339,7 @@ async function addSampleData() {
   }
 }
 
-addSampleData(); // call function to add sample data
+//addSampleData(); // call function to add sample data
 
 // start server
 app.listen(port, () => {
