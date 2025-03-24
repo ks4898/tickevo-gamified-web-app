@@ -18,8 +18,6 @@
     <a href="ticket-list.html">Back to Ticket List</a>
 
     <script>
-        let token = localStorage.getItem('token');
-        let currentUserId = localStorage.getItem('userId');
         let currentTicketId;
 
         function loadTicketInfo() {
@@ -29,7 +27,7 @@
                 $.ajax({
                     url: `/api/tickets/${currentTicketId}`,
                     method: 'GET',
-                    headers: { 'Authorization': token },
+                    headers: { 'Authorization': localStorage.getItem('token') },
                     success: function(ticket) {
                         $('#ticket-info').html(`
                             <h3>${ticket.title}</h3>
@@ -49,7 +47,7 @@
         }
 
         function checkTurn(currentTurn) {
-            if (currentTurn === currentUserId) {
+            if (currentTurn === localStorage.getItem('userId')) {
                 $('#turn-info').text("It's your turn!");
                 $('#message-input, #send-button').prop('disabled', false);
             } else {
@@ -63,7 +61,7 @@
             $.ajax({
                 url: `/api/tickets/${currentTicketId}/messages`,
                 method: 'POST',
-                headers: { 'Authorization': token },
+                headers: { 'Authorization': localStorage.getItem('token') },
                 contentType: 'application/json',
                 data: JSON.stringify({ message }),
                 success: function(response) {
@@ -81,7 +79,7 @@
             $.ajax({
                 url: `/api/tickets/${currentTicketId}/messages`,
                 method: 'GET',
-                headers: { 'Authorization': token },
+                headers: { 'Authorization': localStorage.getItem('token') },
                 success: function(messages) {
                     const messagesHtml = messages.map(msg => 
                         `<p><strong>${msg.username}</strong>: ${msg.message}</p>`

@@ -1,13 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Create Ticket</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
-
 <body>
     <h1>Create a New Ticket</h1>
     <form id="create-ticket-form">
@@ -18,8 +16,8 @@
     <a href="ticket-list.html">Back to Ticket List</a>
 
     <script>
-        $(document).ready(function () {
-            $('#create-ticket-form').submit(function (e) {
+        $(document).ready(function() {
+            $('#create-ticket-form').submit(function(e) {
                 e.preventDefault();
                 const title = $('#ticket-title').val();
                 const description = $('#ticket-description').val();
@@ -29,18 +27,16 @@
                     headers: { 'Authorization': localStorage.getItem('token') },
                     contentType: 'application/json',
                     data: JSON.stringify({ title, description }),
-                    success: function (response) {
+                    success: function(response) {
                         alert('Ticket created successfully!');
                         window.location.href = 'ticket-list.html';
                     },
-                    error: function (xhr) {
+                    error: function(xhr) {
                         alert('Failed to create ticket: ' + xhr.responseJSON.error);
                     }
                 });
             });
         });
-
     </script>
 </body>
-
 </html>
