@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Ticket Chat</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
+
 <body>
     <div id="ticket-info"></div>
     <div id="chat-room">
@@ -31,7 +33,7 @@
                     url: `/api/tickets/${currentTicketId}`,
                     method: 'GET',
                     headers: { 'Authorization': token },
-                    success: function(ticket) {
+                    success: function (ticket) {
                         $('#ticket-info').html(`
                             <h3>${ticket.title}</h3>
                             <p>Created by: ${ticket.createdBy}</p>
@@ -45,7 +47,7 @@
                         checkTurn(ticket);
                         loadMessages();
                     },
-                    error: function(xhr) {
+                    error: function (xhr) {
                         console.error('Failed to load ticket info:', xhr.responseJSON.error);
                         if (xhr.status === 401) {
                             alert('Session expired. Please log in again.');
@@ -63,10 +65,10 @@
                 headers: { 'Authorization': token },
                 contentType: 'application/json',
                 data: JSON.stringify({ stage: newStage }),
-                success: function() {
+                success: function () {
                     loadTicketInfo();
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     console.error('Failed to update ticket stage:', xhr.responseJSON.error);
                 }
             });
@@ -90,10 +92,10 @@
                 url: `/api/tickets/${currentTicketId}/join-queue`,
                 method: 'POST',
                 headers: { 'Authorization': token },
-                success: function() {
+                success: function () {
                     loadTicketInfo();
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     console.error('Failed to join queue:', xhr.responseJSON.error);
                 }
             });
@@ -107,7 +109,7 @@
                 headers: { 'Authorization': token },
                 contentType: 'application/json',
                 data: JSON.stringify({ message }),
-                success: function(response) {
+                success: function (response) {
                     $('#message-input').val('');
                     loadMessages();
                     if (response.stageUpdated) {
@@ -116,7 +118,7 @@
                         checkTurn({ currentTurn: response.nextTurn });
                     }
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     alert('Failed to send message: ' + xhr.responseJSON.error);
                 }
             });
@@ -127,19 +129,19 @@
                 url: `/api/tickets/${currentTicketId}/messages`,
                 method: 'GET',
                 headers: { 'Authorization': token },
-                success: function(messages) {
-                    const messagesHtml = messages.map(msg => 
+                success: function (messages) {
+                    const messagesHtml = messages.map(msg =>
                         `<p><strong>${msg.username}</strong>: ${msg.message}</p>`
                     ).join('');
                     $('#messages').html(messagesHtml);
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     console.error('Failed to load messages:', xhr.responseJSON.error);
                 }
             });
         }
 
-        $(document).ready(function() {
+        $(document).ready(function () {
             if (!token) {
                 window.location.href = 'index.html';
                 return;
@@ -150,4 +152,5 @@
         });
     </script>
 </body>
+
 </html>

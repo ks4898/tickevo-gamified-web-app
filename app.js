@@ -124,7 +124,8 @@ app.get('/api/tickets', verifyToken, async (req, res) => {
 // Get a specific ticket
 app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
   try {
-    const ticketDoc = await db.collection('tickets').doc(req.params.ticketId).get();
+    const ticketRef = db.collection('tickets').doc(req.params.ticketId);
+    const ticketDoc = await ticketRef.get();
     if (!ticketDoc.exists) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
@@ -132,7 +133,71 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       id: ticketDoc.id,
       ...ticketDoc.data()
     };
+
+    // Initialize queue and set current turn if not already set
+    if (!ticket.queue || ticket.queue.length === 0) {
+      if (ticket.createdBy !== req.userId) {
+        await ticketRef.update({
+          queue: [req.userId],
+          currentTurn: req.userId,
+          lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+        });
+        ticket.queue = [req.userId];
+        ticket.currentTurn = req.userId;
+      } else {
+        await ticketRef.update({
+          queue: [],
+          currentTurn: null,
+          lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    }
+
+    // Update stage if necessary
+    if (ticket.stage === 'Unseen' && ticket.createdBy !== req.userId) {
+      await ticketRef.update({
+        stage: 'Pending Review',
+        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+      });
+      ticket.stage = 'Pending Review';
+
+      // Add ticket action
+      await db.collection('ticketActions').add({
+        userId: req.userId,
+        ticketId: req.params.ticketId,
+        actionType: 'View',
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        details: 'Ticket viewed for the first time'
+      });
+    }
+
     res.json(ticket);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Join ticket queue
+app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
+  try {
+    const ticketRef = db.collection('tickets').doc(req.params.ticketId);
+    await db.runTransaction(async (transaction) => {
+      const ticketDoc = await transaction.get(ticketRef);
+      if (!ticketDoc.exists) {
+        throw new Error('Ticket not found');
+      }
+      const ticketData = ticketDoc.data();
+      let queue = ticketData.queue || [];
+      if (!queue.includes(req.userId) && req.userId !== ticketData.createdBy) {
+        queue.push(req.userId);
+        if (!ticketData.currentTurn) {
+          transaction.update(ticketRef, { queue, currentTurn: req.userId });
+        } else {
+          transaction.update(ticketRef, { queue });
+        }
+      }
+    });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
