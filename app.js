@@ -134,26 +134,7 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       ...ticketDoc.data()
     };
 
-    // Initialize queue and set current turn if not already set
-    if (!ticket.queue || ticket.queue.length === 0) {
-      if (ticket.createdBy !== req.userId) {
-        await ticketRef.update({
-          queue: [req.userId],
-          currentTurn: req.userId,
-          lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
-        });
-        ticket.queue = [req.userId];
-        ticket.currentTurn = req.userId;
-      } else {
-        await ticketRef.update({
-          queue: [],
-          currentTurn: null,
-          lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
-        });
-      }
-    }
-
-    // Update stage if necessary
+    // Only update stage if the viewer is not the creator
     if (ticket.stage === 'Unseen' && ticket.createdBy !== req.userId) {
       await ticketRef.update({
         stage: 'Pending Review',
@@ -169,6 +150,14 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         details: 'Ticket viewed for the first time'
       });
+    }
+
+    // Set currentTurn to the first non-creator user who views the ticket
+    if (!ticket.currentTurn && ticket.createdBy !== req.userId) {
+      await ticketRef.update({
+        currentTurn: req.userId
+      });
+      ticket.currentTurn = req.userId;
     }
 
     res.json(ticket);
@@ -342,8 +331,8 @@ async function addSampleData() {
 
     for (const ticket of tickets) {
       const ticketRef = await db.collection('tickets').add(ticket);
-
-      // Add sample messages for each ticket
+    }
+      /*// Add sample messages for each ticket
       const messages = [
         { userId: userRefs[0].id, username: 'user1', message: 'I can reproduce this issue', timestamp: admin.firestore.FieldValue.serverTimestamp() },
         { userId: userRefs[1].id, username: 'user2', message: 'Let me take a look at it', timestamp: admin.firestore.FieldValue.serverTimestamp() },
@@ -396,7 +385,7 @@ async function addSampleData() {
 
     for (const badge of badges) {
       await db.collection('badges').add(badge);
-    }
+    }*/
 
     console.log('Sample data added successfully');
   } catch (error) {
@@ -404,7 +393,7 @@ async function addSampleData() {
   }
 }
 
-//addSampleData(); // call function to add sample data
+addSampleData(); // call function to add sample data
 
 // start server
 app.listen(port, () => {

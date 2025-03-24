@@ -1,11 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Ticket List</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        (function () {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = 'index.html';
+            }
+        })();
+    </script>
 </head>
+
 <body>
     <h1>Available Tickets</h1>
     <ul id="ticket-list"></ul>
@@ -23,7 +33,7 @@
                 url: '/api/tickets',
                 method: 'GET',
                 headers: { 'Authorization': token },
-                success: function(tickets) {
+                success: function (tickets) {
                     const ticketList = $('#ticket-list');
                     ticketList.empty();
                     tickets.forEach(ticket => {
@@ -37,7 +47,7 @@
                         `);
                     });
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     if (xhr.status === 401) {
                         alert('Session expired. Please log in again.');
                         window.location.href = 'index.html';
@@ -48,10 +58,11 @@
             });
         }
 
-        $(document).ready(function() {
+        $(document).ready(function () {
             loadTickets();
             setInterval(loadTickets, 30000); // Refresh every 30 seconds
         });
     </script>
 </body>
+
 </html>

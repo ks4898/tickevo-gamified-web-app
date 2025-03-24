@@ -1,11 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Login</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        if (localStorage.getItem('token')) {
+            window.location.href = 'ticket-list.html';
+        }
+    </script>
 </head>
+
 <body>
     <div id="login-form">
         <h2>Login</h2>
@@ -23,17 +30,18 @@
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify({ username, password }),
-                success: function(response) {
+                success: function (response) {
                     localStorage.setItem('token', response.token);
                     localStorage.setItem('userId', response.userId);
                     localStorage.setItem('username', response.username);
                     window.location.href = 'ticket-list.html';
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     alert('Login failed: ' + xhr.responseJSON.error);
                 }
             });
         }
     </script>
 </body>
+
 </html>

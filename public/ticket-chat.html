@@ -6,6 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Ticket Chat</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        (function () {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = 'index.html';
+            }
+        })();
+    </script>
 </head>
 
 <body>
@@ -75,15 +83,12 @@
         }
 
         function checkTurn(ticket) {
-            if (ticket.currentTurn === currentUserId) {
+            if (ticket.currentTurn === currentUserId && currentUserId !== ticket.createdBy) {
                 $('#turn-info').text("It's your turn!");
                 $('#message-input, #send-button').prop('disabled', false);
             } else {
                 $('#turn-info').text("Waiting for your turn...");
                 $('#message-input, #send-button').prop('disabled', true);
-                if (!ticket.queue.includes(currentUserId) && currentUserId !== ticket.createdBy) {
-                    joinQueue();
-                }
             }
         }
 

@@ -1,11 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Create Ticket</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        (function () {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = 'index.html';
+            }
+        })();
+    </script>
 </head>
+
 <body>
     <h1>Create a New Ticket</h1>
     <form id="create-ticket-form">
@@ -16,14 +26,14 @@
     <a href="ticket-list.html">Back to Ticket List</a>
 
     <script>
-        $(document).ready(function() {
+        $(document).ready(function () {
             const token = localStorage.getItem('token');
             if (!token) {
                 window.location.href = 'login.html';
                 return;
             }
 
-            $('#create-ticket-form').submit(function(e) {
+            $('#create-ticket-form').submit(function (e) {
                 e.preventDefault();
                 const title = $('#ticket-title').val();
                 const description = $('#ticket-description').val();
@@ -33,11 +43,11 @@
                     headers: { 'Authorization': token },
                     contentType: 'application/json',
                     data: JSON.stringify({ title, description }),
-                    success: function(response) {
+                    success: function (response) {
                         alert('Ticket created successfully!');
                         window.location.href = 'ticket-list.html';
                     },
-                    error: function(xhr) {
+                    error: function (xhr) {
                         if (xhr.status === 401) {
                             alert('Session expired. Please log in again.');
                             window.location.href = 'login.html';
@@ -50,4 +60,5 @@
         });
     </script>
 </body>
+
 </html>
