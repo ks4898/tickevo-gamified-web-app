@@ -32,6 +32,29 @@ const verifyToken = (req, res, next) => {
   });
 };
 
+// Signup endpoint
+app.post('/api/signup', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const userDoc = await db.collection('users').where('username', '==', username).get();
+    if (!userDoc.empty) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = await db.collection('users').add({
+      username,
+      password: hashedPassword,
+      exp: 0,
+      ticketTokens: 0,
+      badges: []
+    });
+    res.json({ success: true, userId: newUser.id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
