@@ -6,10 +6,7 @@ const bcrypt = require('bcrypt');
 const app = express();
 const port = 3000;
 
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -51,28 +48,6 @@ app.post('/api/login', async (req, res) => {
     const userId = userDoc.docs[0].id;
     const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
     res.json({ token, userId, username: user.username });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Signup endpoint
-app.post('/api/signup', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const userDoc = await db.collection('users').where('username', '==', username).get();
-    if (!userDoc.empty) {
-      return res.status(400).json({ error: 'Username already exists' });
-    }
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await db.collection('users').add({
-      username,
-      password: hashedPassword,
-      exp: 0,
-      ticketTokens: 0,
-      badges: []
-    });
-    res.json({ success: true, userId: newUser.id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

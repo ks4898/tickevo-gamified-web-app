@@ -19,6 +19,8 @@
 
     <script>
         let currentTicketId;
+        const token = localStorage.getItem('token');
+        const currentUserId = localStorage.getItem('userId');
 
         function loadTicketInfo() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -27,7 +29,7 @@
                 $.ajax({
                     url: `/api/tickets/${currentTicketId}`,
                     method: 'GET',
-                    headers: { 'Authorization': localStorage.getItem('token') },
+                    headers: { 'Authorization': token },
                     success: function(ticket) {
                         $('#ticket-info').html(`
                             <h3>${ticket.title}</h3>
@@ -41,13 +43,17 @@
                     },
                     error: function(xhr) {
                         console.error('Failed to load ticket info:', xhr.responseJSON.error);
+                        if (xhr.status === 401) {
+                            alert('Session expired. Please log in again.');
+                            window.location.href = 'login.html';
+                        }
                     }
                 });
             }
         }
 
         function checkTurn(currentTurn) {
-            if (currentTurn === localStorage.getItem('userId')) {
+            if (currentTurn === currentUserId) {
                 $('#turn-info').text("It's your turn!");
                 $('#message-input, #send-button').prop('disabled', false);
             } else {
@@ -61,7 +67,7 @@
             $.ajax({
                 url: `/api/tickets/${currentTicketId}/messages`,
                 method: 'POST',
-                headers: { 'Authorization': localStorage.getItem('token') },
+                headers: { 'Authorization': token },
                 contentType: 'application/json',
                 data: JSON.stringify({ message }),
                 success: function(response) {
@@ -70,7 +76,12 @@
                     checkTurn(response.nextTurn);
                 },
                 error: function(xhr) {
-                    alert('Failed to send message: ' + xhr.responseJSON.error);
+                    if (xhr.status === 401) {
+                        alert('Session expired. Please log in again.');
+                        window.location.href = 'login.html';
+                    } else {
+                        alert('Failed to send message: ' + xhr.responseJSON.error);
+                    }
                 }
             });
         }
@@ -79,7 +90,7 @@
             $.ajax({
                 url: `/api/tickets/${currentTicketId}/messages`,
                 method: 'GET',
-                headers: { 'Authorization': localStorage.getItem('token') },
+                headers: { 'Authorization': token },
                 success: function(messages) {
                     const messagesHtml = messages.map(msg => 
                         `<p><strong>${msg.username}</strong>: ${msg.message}</p>`
@@ -88,11 +99,19 @@
                 },
                 error: function(xhr) {
                     console.error('Failed to load messages:', xhr.responseJSON.error);
+                    if (xhr.status === 401) {
+                        alert('Session expired. Please log in again.');
+                        window.location.href = 'login.html';
+                    }
                 }
             });
         }
 
         $(document).ready(function() {
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
             loadTicketInfo();
             setInterval(loadMessages, 5000);
             setInterval(loadTicketInfo, 5000);

@@ -13,10 +13,16 @@
 
     <script>
         $(document).ready(function() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+
             $.ajax({
                 url: '/api/tickets',
                 method: 'GET',
-                headers: { 'Authorization': localStorage.getItem('token') },
+                headers: { 'Authorization': token },
                 success: function(tickets) {
                     const ticketList = $('#ticket-list');
                     tickets.forEach(ticket => {
@@ -31,7 +37,12 @@
                     });
                 },
                 error: function(xhr) {
-                    alert('Failed to fetch tickets: ' + xhr.responseJSON.error);
+                    if (xhr.status === 401) {
+                        alert('Session expired. Please log in again.');
+                        window.location.href = 'login.html';
+                    } else {
+                        alert('Failed to fetch tickets: ' + xhr.responseJSON.error);
+                    }
                 }
             });
         });
