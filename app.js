@@ -107,7 +107,7 @@ app.get('/api/tickets', verifyToken, async (req, res) => {
       id: doc.id,
       ...doc.data()
     }));
-    
+
     // Sort tickets by priority (High first) and then alphabetically by title
     tickets.sort((a, b) => {
       if (a.priority === b.priority) {
@@ -115,7 +115,7 @@ app.get('/api/tickets', verifyToken, async (req, res) => {
       }
       return a.priority === 'High' ? -1 : 1;
     });
-    
+
     res.json(tickets);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -135,13 +135,17 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       ...ticketDoc.data()
     };
 
-    // Only update stage if the viewer is not the creator
+    // Update stage if necessary and viewer is not the creator
     if (ticket.stage === 'Unseen' && ticket.createdId !== req.userId) {
       await ticketRef.update({
         stage: 'Pending Review',
-        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
+        queue: admin.firestore.FieldValue.arrayUnion(req.userId),
+        currentTurn: req.userId
       });
       ticket.stage = 'Pending Review';
+      ticket.queue = [req.userId];
+      ticket.currentTurn = req.userId;
 
       // Add ticket action
       await db.collection('ticketActions').add({
@@ -151,16 +155,6 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         details: 'Ticket viewed for the first time'
       });
-
-      // Set currentTurn to the first non-creator user who views the ticket
-      if (!ticket.currentTurn) {
-        await ticketRef.update({
-          currentTurn: req.userId,
-          queue: [req.userId]
-        });
-        ticket.currentTurn = req.userId;
-        ticket.queue = [req.userId];
-      }
     }
 
     res.json(ticket);
@@ -224,9 +218,15 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         throw new Error('Ticket not found');
       }
       const ticketData = ticketDoc.data();
-      
+
+      // Check if it's the user's turn
       if (ticketData.currentTurn !== req.userId) {
         throw new Error('Not your turn');
+      }
+
+      // Check if the creator is trying to send a message in 'Unseen' or 'Pending Review' stage
+      if ((ticketData.stage === 'Unseen' || ticketData.stage === 'Pending Review') && ticketData.createdId === req.userId) {
+        throw new Error('Creator cannot send messages until the ticket is in Under Review stage');
       }
 
       const userDoc = await db.collection('users').doc(req.userId).get();
@@ -241,20 +241,32 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // Update stage if necessary
-      if (ticketData.stage === 'Pending Review' && ticketData.createdBy !== username) {
+      // Update stage to 'Under Review' if necessary
+      if (ticketData.stage === 'Pending Review') {
         transaction.update(ticketRef, { stage: 'Under Review' });
         stageUpdated = true;
       }
 
       // Update turn
-      let queue = ticketData.queue.filter(id => id !== req.userId);
+      let queue = ticketData.queue || [];
+      queue = queue.filter(id => id !== req.userId);
       if (queue.length > 0) {
         nextTurn = queue[0];
       } else if (ticketData.createdBy !== req.userId) {
         nextTurn = ticketData.createdBy;
+        queue.push(ticketData.createdBy);
+      } else {
+        const allUsers = await db.collection('users').get();
+        const availableUsers = allUsers.docs
+          .map(doc => doc.id)
+          .filter(id => id !== req.userId && id !== ticketData.createdBy);
+        if (availableUsers.length > 0) {
+          nextTurn = availableUsers[0];
+          queue.push(nextTurn);
+        }
       }
-      transaction.update(ticketRef, { 
+
+      transaction.update(ticketRef, {
         currentTurn: nextTurn,
         queue: queue,
         lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()

@@ -72,8 +72,10 @@
         }
 
         function checkTurn(ticket) {
-            if (ticket.createdId === currentUserId) {
-                $('#turn-info').text("You are the creator of this ticket.");
+            const isCreator = ticket.createdId === currentUserId;
+
+            if ((ticket.stage === 'Unseen' || ticket.stage === 'Pending Review') && isCreator) {
+                $('#turn-info').text("Waiting for other users to review the ticket.");
                 $('#message-input, #send-button').prop('disabled', true);
             } else if (ticket.currentTurn === currentUserId) {
                 $('#turn-info').text("It's your turn!");
@@ -81,11 +83,12 @@
             } else {
                 $('#turn-info').text("Waiting for your turn...");
                 $('#message-input, #send-button').prop('disabled', true);
-                if (!ticket.queue.includes(currentUserId)) {
+                if (!isCreator && !ticket.queue.includes(currentUserId)) {
                     joinQueue();
                 }
             }
         }
+
 
         function joinQueue() {
             $.ajax({
