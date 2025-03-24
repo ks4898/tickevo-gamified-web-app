@@ -219,7 +219,7 @@ async function addSampleData() {
   }
 }
 
-addSampleData(); // call function to add sample data
+//addSampleData(); // call function to add sample data
 
 // start server
 app.listen(port, () => {

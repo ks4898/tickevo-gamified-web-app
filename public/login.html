@@ -42,20 +42,16 @@
                 contentType: 'application/json',
                 data: JSON.stringify({ username, password }),
                 success: function (response) {
-                    token = response.token;
-                    currentUserId = response.userId;
-                    $('#login-form').hide();
-                    $('#chat-room').show();
-                    getMessages();
-                    checkTurn();
-                    messageInterval = setInterval(getMessages, 2000);
-                    turnInterval = setInterval(checkTurn, 2000);
+                    localStorage.setItem('token', response.token);
+                    localStorage.setItem('userId', response.userId);
+                    window.location.href = 'ticket-list.html';
                 },
                 error: function (xhr) {
                     alert('Login failed: ' + xhr.responseJSON.error);
                 }
             });
         }
+
 
         function sendMessage() {
             const message = $('#message-input').val();
