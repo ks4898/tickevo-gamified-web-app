@@ -9,6 +9,7 @@
 <body>
     <h1>Available Tickets</h1>
     <ul id="ticket-list"></ul>
+    <a href="create-ticket.html">Create New Ticket</a>
 
     <script>
         $(document).ready(function() {
@@ -24,6 +25,7 @@
                                 <a href="ticket-chat.html?id=${ticket.id}">
                                     ${ticket.title} - ${ticket.stage} (${ticket.priority})
                                 </a>
+                                <p>Created by: ${ticket.createdBy}</p>
                             </li>
                         `);
                     });

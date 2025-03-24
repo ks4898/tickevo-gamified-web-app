@@ -15,6 +15,7 @@
         <input type="text" id="message-input" placeholder="Type a message...">
         <button onclick="sendMessage()" id="send-button">Send</button>
     </div>
+    <a href="ticket-list.html">Back to Ticket List</a>
 
     <script>
         let token = localStorage.getItem('token');
@@ -38,6 +39,7 @@
                             <p>Priority: ${ticket.priority}</p>
                         `);
                         checkTurn(ticket.currentTurn);
+                        loadMessages();
                     },
                     error: function(xhr) {
                         console.error('Failed to load ticket info:', xhr.responseJSON.error);
@@ -58,13 +60,44 @@
 
         function sendMessage() {
             const message = $('#message-input').val();
-            // Implement message sending logic here
-            // Update the currentTurn in the ticket document after sending the message
+            $.ajax({
+                url: `/api/tickets/${currentTicketId}/messages`,
+                method: 'POST',
+                headers: { 'Authorization': token },
+                contentType: 'application/json',
+                data: JSON.stringify({ message }),
+                success: function(response) {
+                    $('#message-input').val('');
+                    loadMessages();
+                    checkTurn(response.nextTurn);
+                },
+                error: function(xhr) {
+                    alert('Failed to send message: ' + xhr.responseJSON.error);
+                }
+            });
+        }
+
+        function loadMessages() {
+            $.ajax({
+                url: `/api/tickets/${currentTicketId}/messages`,
+                method: 'GET',
+                headers: { 'Authorization': token },
+                success: function(messages) {
+                    const messagesHtml = messages.map(msg => 
+                        `<p><strong>${msg.username}</strong>: ${msg.message}</p>`
+                    ).join('');
+                    $('#messages').html(messagesHtml);
+                },
+                error: function(xhr) {
+                    console.error('Failed to load messages:', xhr.responseJSON.error);
+                }
+            });
         }
 
         $(document).ready(function() {
             loadTicketInfo();
-            // Implement message fetching and display logic here
+            setInterval(loadMessages, 5000);
+            setInterval(loadTicketInfo, 5000);
         });
     </script>
 </body>

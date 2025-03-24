@@ -11,12 +11,9 @@
     <form id="create-ticket-form">
         <input type="text" id="ticket-title" placeholder="Ticket Title" required>
         <textarea id="ticket-description" placeholder="Ticket Description" required></textarea>
-        <select id="ticket-priority">
-            <option value="Normal">Normal</option>
-            <option value="High">High</option>
-        </select>
         <button type="submit">Create Ticket</button>
     </form>
+    <a href="ticket-list.html">Back to Ticket List</a>
 
     <script>
         $(document).ready(function() {
@@ -24,13 +21,12 @@
                 e.preventDefault();
                 const title = $('#ticket-title').val();
                 const description = $('#ticket-description').val();
-                const priority = $('#ticket-priority').val();
                 $.ajax({
                     url: '/api/create-ticket',
                     method: 'POST',
                     headers: { 'Authorization': localStorage.getItem('token') },
                     contentType: 'application/json',
-                    data: JSON.stringify({ title, description, priority }),
+                    data: JSON.stringify({ title, description }),
                     success: function(response) {
                         alert('Ticket created successfully!');
                         window.location.href = 'ticket-list.html';
