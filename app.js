@@ -139,13 +139,9 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     if (ticket.stage === 'Unseen' && ticket.createdId !== req.userId) {
       await ticketRef.update({
         stage: 'Pending Review',
-        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
-        queue: admin.firestore.FieldValue.arrayUnion(req.userId),
-        currentTurn: req.userId
+        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
       });
       ticket.stage = 'Pending Review';
-      ticket.queue = [req.userId];
-      ticket.currentTurn = req.userId;
 
       // Add ticket action
       await db.collection('ticketActions').add({
@@ -155,6 +151,24 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         details: 'Ticket viewed for the first time'
       });
+    }
+
+    // Add user to queue if not already in it and not the creator
+    if (!ticket.queue) {
+      ticket.queue = [];
+    }
+    if (!ticket.queue.includes(req.userId) && ticket.createdId !== req.userId) {
+      await ticketRef.update({
+        queue: admin.firestore.FieldValue.arrayUnion(req.userId)
+      });
+      ticket.queue.push(req.userId);
+    }
+
+    // Set current turn if not set
+    if (!ticket.currentTurn && ticket.queue.length > 0) {
+      const nextTurn = ticket.queue[0];
+      await ticketRef.update({ currentTurn: nextTurn });
+      ticket.currentTurn = nextTurn;
     }
 
     res.json(ticket);
@@ -219,14 +233,8 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       }
       const ticketData = ticketDoc.data();
 
-      // Check if it's the user's turn
-      if (ticketData.currentTurn !== req.userId) {
+      if (ticketData.currentTurn && ticketData.currentTurn !== req.userId) {
         throw new Error('Not your turn');
-      }
-
-      // Check if the creator is trying to send a message in 'Unseen' or 'Pending Review' stage
-      if ((ticketData.stage === 'Unseen' || ticketData.stage === 'Pending Review') && ticketData.createdId === req.userId) {
-        throw new Error('Creator cannot send messages until the ticket is in Under Review stage');
       }
 
       const userDoc = await db.collection('users').doc(req.userId).get();
@@ -241,7 +249,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // Update stage to 'Under Review' if necessary
+      // Update stage if necessary
       if (ticketData.stage === 'Pending Review') {
         transaction.update(ticketRef, { stage: 'Under Review' });
         stageUpdated = true;
