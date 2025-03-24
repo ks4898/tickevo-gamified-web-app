@@ -6,14 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Ticket List</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-        (function () {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                window.location.href = 'index.html';
-            }
-        })();
-    </script>
 </head>
 
 <body>
@@ -37,7 +29,8 @@
                     const ticketList = $('#ticket-list');
                     ticketList.empty();
                     tickets.forEach(ticket => {
-                        ticketList.append(`
+                        if (ticket.createdId !== "") {
+                            ticketList.append(`
                             <li>
                                 <a href="ticket-chat.html?id=${ticket.id}">
                                     ${ticket.title} - ${ticket.stage} (${ticket.priority})
@@ -45,6 +38,7 @@
                                 <p>Created by: ${ticket.createdBy}</p>
                             </li>
                         `);
+                        }
                     });
                 },
                 error: function (xhr) {

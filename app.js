@@ -85,6 +85,7 @@ app.post('/api/create-ticket', verifyToken, async (req, res) => {
       title,
       description,
       createdBy: username,
+      createdId: req.userId,
       creationDate: admin.firestore.FieldValue.serverTimestamp(),
       lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
       stage: 'Unseen',
@@ -135,7 +136,7 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     };
 
     // Only update stage if the viewer is not the creator
-    if (ticket.stage === 'Unseen' && ticket.createdBy !== req.userId) {
+    if (ticket.stage === 'Unseen' && ticket.createdId !== req.userId) {
       await ticketRef.update({
         stage: 'Pending Review',
         lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
@@ -150,14 +151,16 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         details: 'Ticket viewed for the first time'
       });
-    }
 
-    // Set currentTurn to the first non-creator user who views the ticket
-    if (!ticket.currentTurn && ticket.createdBy !== req.userId) {
-      await ticketRef.update({
-        currentTurn: req.userId
-      });
-      ticket.currentTurn = req.userId;
+      // Set currentTurn to the first non-creator user who views the ticket
+      if (!ticket.currentTurn) {
+        await ticketRef.update({
+          currentTurn: req.userId,
+          queue: [req.userId]
+        });
+        ticket.currentTurn = req.userId;
+        ticket.queue = [req.userId];
+      }
     }
 
     res.json(ticket);
@@ -177,7 +180,7 @@ app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
       }
       const ticketData = ticketDoc.data();
       let queue = ticketData.queue || [];
-      if (!queue.includes(req.userId) && req.userId !== ticketData.createdBy) {
+      if (!queue.includes(req.userId) && req.userId !== ticketData.createdId) {
         queue.push(req.userId);
         if (!ticketData.currentTurn) {
           transaction.update(ticketRef, { queue, currentTurn: req.userId });
@@ -199,32 +202,6 @@ app.put('/api/tickets/:ticketId/stage', verifyToken, async (req, res) => {
     await db.collection('tickets').doc(req.params.ticketId).update({
       stage,
       lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
-    });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Join ticket queue
-app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
-  try {
-    const ticketRef = db.collection('tickets').doc(req.params.ticketId);
-    await db.runTransaction(async (transaction) => {
-      const ticketDoc = await transaction.get(ticketRef);
-      if (!ticketDoc.exists) {
-        throw new Error('Ticket not found');
-      }
-      const ticketData = ticketDoc.data();
-      let queue = ticketData.queue || [];
-      if (!queue.includes(req.userId) && req.userId !== ticketData.createdBy) {
-        queue.push(req.userId);
-        if (!ticketData.currentTurn) {
-          transaction.update(ticketRef, { queue, currentTurn: req.userId });
-        } else {
-          transaction.update(ticketRef, { queue });
-        }
-      }
     });
     res.json({ success: true });
   } catch (error) {
@@ -322,7 +299,7 @@ async function addSampleData() {
       userRefs.push(userRef);
     }
 
-    // Add sample tickets
+    /*// Add sample tickets
     const tickets = [
       { title: 'Bug in login page', description: 'Users unable to log in', createdBy: 'user1', creationDate: admin.firestore.FieldValue.serverTimestamp(), lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(), stage: 'Unseen', priority: 'Normal', currentTurn: null },
       { title: 'Feature request: Dark mode', description: 'Implement dark mode for better user experience', createdBy: 'user2', creationDate: admin.firestore.FieldValue.serverTimestamp(), lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(), stage: 'Pending Review', priority: 'High', currentTurn: null },
@@ -332,7 +309,7 @@ async function addSampleData() {
     for (const ticket of tickets) {
       const ticketRef = await db.collection('tickets').add(ticket);
     }
-      /*// Add sample messages for each ticket
+      // Add sample messages for each ticket
       const messages = [
         { userId: userRefs[0].id, username: 'user1', message: 'I can reproduce this issue', timestamp: admin.firestore.FieldValue.serverTimestamp() },
         { userId: userRefs[1].id, username: 'user2', message: 'Let me take a look at it', timestamp: admin.firestore.FieldValue.serverTimestamp() },
@@ -393,7 +370,7 @@ async function addSampleData() {
   }
 }
 
-addSampleData(); // call function to add sample data
+//addSampleData(); // call function to add sample data
 
 // start server
 app.listen(port, () => {
