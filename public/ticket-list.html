@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TickEvo - Ticket List</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Available Tickets</h1>
+    <ul id="ticket-list"></ul>
+
+    <script>
+        $(document).ready(function() {
+            $.ajax({
+                url: '/api/tickets',
+                method: 'GET',
+                headers: { 'Authorization': localStorage.getItem('token') },
+                success: function(tickets) {
+                    const ticketList = $('#ticket-list');
+                    tickets.forEach(ticket => {
+                        ticketList.append(`
+                            <li>
+                                <a href="ticket-chat.html?id=${ticket.id}">
+                                    ${ticket.title} - ${ticket.stage} (${ticket.priority})
+                                </a>
+                            </li>
+                        `);
+                    });
+                },
+                error: function(xhr) {
+                    alert('Failed to fetch tickets: ' + xhr.responseJSON.error);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

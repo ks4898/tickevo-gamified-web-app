@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Login and Chat</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
+
 <body>
     <div id="login-form">
         <h2>Login</h2>
@@ -16,6 +18,7 @@
 
     <div id="chat-room" style="display: none;">
         <h2>Chat Room</h2>
+        <div id="ticket-info"></div>
         <div id="turn-info"></div>
         <div id="messages"></div>
         <input type="text" id="message-input" placeholder="Type a message...">
@@ -28,6 +31,7 @@
         let messageInterval;
         let turnInterval;
         let lastDisplayedMessageId = null;
+        let currentTicketId = null;
 
         function login() {
             const username = $('#username').val();
@@ -37,7 +41,7 @@
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify({ username, password }),
-                success: function(response) {
+                success: function (response) {
                     token = response.token;
                     currentUserId = response.userId;
                     $('#login-form').hide();
@@ -47,7 +51,7 @@
                     messageInterval = setInterval(getMessages, 2000);
                     turnInterval = setInterval(checkTurn, 2000);
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     alert('Login failed: ' + xhr.responseJSON.error);
                 }
             });
@@ -61,12 +65,12 @@
                 headers: { 'Authorization': token },
                 contentType: 'application/json',
                 data: JSON.stringify({ message }),
-                success: function(response) {
+                success: function (response) {
                     $('#message-input').val('');
                     getMessages();
                     checkTurn();
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     alert('Failed to send message: ' + xhr.responseJSON.error);
                 }
             });
@@ -77,8 +81,8 @@
                 url: '/api/get-messages',
                 method: 'GET',
                 headers: { 'Authorization': token },
-                success: function(messages) {
-                    const messagesHtml = messages.map(msg => 
+                success: function (messages) {
+                    const messagesHtml = messages.map(msg =>
                         `<p><strong>${msg.username}</strong>: ${msg.message}</p>`
                     ).join('');
                     $('#messages').html(messagesHtml);
@@ -86,7 +90,7 @@
                         lastDisplayedMessageId = messages[messages.length - 1].id;
                     }
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     console.error('Failed to get messages:', xhr.responseJSON.error);
                 }
             });
@@ -97,7 +101,7 @@
                 url: '/api/current-turn',
                 method: 'GET',
                 headers: { 'Authorization': token },
-                success: function(response) {
+                success: function (response) {
                     if (response.isYourTurn) {
                         $('#turn-info').text("It's your turn!");
                         $('#message-input, #send-button').prop('disabled', false);
@@ -106,11 +110,49 @@
                         $('#message-input, #send-button').prop('disabled', true);
                     }
                 },
-                error: function(xhr) {
+                error: function (xhr) {
                     console.error('Failed to check turn:', xhr.responseJSON.error);
                 }
             });
         }
+
+        function loadTicketInfo() {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentTicketId = urlParams.get('id');
+            if (currentTicketId) {
+                $.ajax({
+                    url: `/api/tickets/${currentTicketId}`,
+                    method: 'GET',
+                    headers: { 'Authorization': token },
+                    success: function (ticket) {
+                        $('#ticket-info').html(`
+                            <h3>${ticket.title}</h3>
+                            <p>Created by: ${ticket.createdBy}</p>
+                            <p>${ticket.description}</p>
+                        `);
+                    },
+                    error: function (xhr) {
+                        console.error('Failed to load ticket info:', xhr.responseJSON.error);
+                    }
+                });
+            }
+        }
+
+        $(document).ready(function () {
+            if (localStorage.getItem('token')) {
+                token = localStorage.getItem('token');
+                currentUserId = localStorage.getItem('userId');
+                $('#login-form').hide();
+                $('#chat-room').show();
+                loadTicketInfo();
+                getMessages();
+                checkTurn();
+                messageInterval = setInterval(getMessages, 2000);
+                turnInterval = setInterval(checkTurn, 2000);
+            }
+        });
+
     </script>
 </body>
+
 </html>

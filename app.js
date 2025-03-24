@@ -151,6 +151,57 @@ app.get('/api/get-messages', verifyToken, async (req, res) => {
   }
 });
 
+// create a new ticket
+app.post('/api/create-ticket', verifyToken, async (req, res) => {
+  const { title, description, priority } = req.body;
+  try {
+    const newTicket = await db.collection('tickets').add({
+      title,
+      description,
+      createdBy: req.userId,
+      creationDate: admin.firestore.FieldValue.serverTimestamp(),
+      lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
+      stage: 'Unseen',
+      priority: priority || 'Normal',
+      currentTurn: req.userId
+    });
+    res.json({ success: true, ticketId: newTicket.id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// get all tickets
+app.get('/api/tickets', verifyToken, async (req, res) => {
+  try {
+    const ticketsSnapshot = await db.collection('tickets').orderBy('creationDate', 'description').get();
+    const tickets = ticketsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    res.json(tickets);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// get a specific ticket
+app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
+  try {
+    const ticketDoc = await db.collection('tickets').doc(req.params.ticketId).get();
+    if (!ticketDoc.exists) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    const ticket = {
+      id: ticketDoc.id,
+      ...ticketDoc.data()
+    };
+    res.json(ticket);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // add sample data for test
 async function addSampleData() {
     const users = [

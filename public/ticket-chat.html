@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TickEvo - Ticket Chat</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div id="ticket-info"></div>
+    <div id="chat-room">
+        <h2>Chat Room</h2>
+        <div id="turn-info"></div>
+        <div id="messages"></div>
+        <input type="text" id="message-input" placeholder="Type a message...">
+        <button onclick="sendMessage()" id="send-button">Send</button>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('token');
+        let currentUserId = localStorage.getItem('userId');
+        let currentTicketId;
+
+        function loadTicketInfo() {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentTicketId = urlParams.get('id');
+            if (currentTicketId) {
+                $.ajax({
+                    url: `/api/tickets/${currentTicketId}`,
+                    method: 'GET',
+                    headers: { 'Authorization': token },
+                    success: function(ticket) {
+                        $('#ticket-info').html(`
+                            <h3>${ticket.title}</h3>
+                            <p>Created by: ${ticket.createdBy}</p>
+                            <p>Description: ${ticket.description}</p>
+                            <p>Stage: ${ticket.stage}</p>
+                            <p>Priority: ${ticket.priority}</p>
+                        `);
+                        checkTurn(ticket.currentTurn);
+                    },
+                    error: function(xhr) {
+                        console.error('Failed to load ticket info:', xhr.responseJSON.error);
+                    }
+                });
+            }
+        }
+
+        function checkTurn(currentTurn) {
+            if (currentTurn === currentUserId) {
+                $('#turn-info').text("It's your turn!");
+                $('#message-input, #send-button').prop('disabled', false);
+            } else {
+                $('#turn-info').text("Waiting for your turn...");
+                $('#message-input, #send-button').prop('disabled', true);
+            }
+        }
+
+        function sendMessage() {
+            const message = $('#message-input').val();
+            // Implement message sending logic here
+            // Update the currentTurn in the ticket document after sending the message
+        }
+
+        $(document).ready(function() {
+            loadTicketInfo();
+            // Implement message fetching and display logic here
+        });
+    </script>
+</body>
+</html>

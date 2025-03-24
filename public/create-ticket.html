@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TickEvo - Create Ticket</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Create a New Ticket</h1>
+    <form id="create-ticket-form">
+        <input type="text" id="ticket-title" placeholder="Ticket Title" required>
+        <textarea id="ticket-description" placeholder="Ticket Description" required></textarea>
+        <select id="ticket-priority">
+            <option value="Normal">Normal</option>
+            <option value="High">High</option>
+        </select>
+        <button type="submit">Create Ticket</button>
+    </form>
+
+    <script>
+        $(document).ready(function() {
+            $('#create-ticket-form').submit(function(e) {
+                e.preventDefault();
+                const title = $('#ticket-title').val();
+                const description = $('#ticket-description').val();
+                const priority = $('#ticket-priority').val();
+                $.ajax({
+                    url: '/api/create-ticket',
+                    method: 'POST',
+                    headers: { 'Authorization': localStorage.getItem('token') },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ title, description, priority }),
+                    success: function(response) {
+                        alert('Ticket created successfully!');
+                        window.location.href = 'ticket-list.html';
+                    },
+                    error: function(xhr) {
+                        alert('Failed to create ticket: ' + xhr.responseJSON.error);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
