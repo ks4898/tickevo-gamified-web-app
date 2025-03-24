@@ -19,7 +19,7 @@ admin.initializeApp({
 const db = admin.firestore();
 
 // JWT secret key
-const JWT_SECRET = '70724d8d89b3766b4b45cf61838142419d7ab90c7f6556577e94bbb9fa03a1fdad18cf5c8d27bcfe250eac323b5a7de9d9d4d60d68f0d2052b2b96a15b41a15b78697fb61f6810d3b37662bd0e194dd2da4d94de45268c1172ffc4950cc560b123cd9f4d5524995b2922bed0b3eda3389dce26e627b6bd34d80220534f4123a514bbc50ca21ebe66e27bc8b7facf8654eaa97e6c56e1af2d9c972072cd4a0a46431713470b463cfd12c54ee84ae0fb8dc99eb543ea29db38ca7bfd1f821b1919558f5dc8a7a6e9967cbc822dcd5f2c727217dbfe606726741ebd0b1c543ad12b762e9560a4951d0fdcd10c63c76b72efb76c4a26fca66ddadcad9c105748f59e';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -55,7 +55,7 @@ app.post('/api/login', async (req, res) => {
 
 // Create a new ticket
 app.post('/api/create-ticket', verifyToken, async (req, res) => {
-  const { title, description } = req.body;
+  const { title, description, priority } = req.body;
   try {
     const userDoc = await db.collection('users').doc(req.userId).get();
     const username = userDoc.data().username;
@@ -66,8 +66,8 @@ app.post('/api/create-ticket', verifyToken, async (req, res) => {
       creationDate: admin.firestore.FieldValue.serverTimestamp(),
       lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
       stage: 'Unseen',
-      priority: 'Normal',
-      currentTurn: req.userId
+      priority: priority || 'Normal',
+      currentTurn: null
     });
     res.json({ success: true, ticketId: newTicket.id });
   } catch (error) {
@@ -106,6 +106,20 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
   }
 });
 
+// Update ticket stage
+app.put('/api/tickets/:ticketId/stage', verifyToken, async (req, res) => {
+  const { stage } = req.body;
+  try {
+    await db.collection('tickets').doc(req.params.ticketId).update({
+      stage,
+      lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get chat messages for a specific ticket
 app.get('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   try {
@@ -129,27 +143,79 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   try {
     const ticketDoc = await db.collection('tickets').doc(ticketId).get();
     const ticketData = ticketDoc.data();
-    if (ticketData.currentTurn !== req.userId) {
+    
+    if (ticketData.currentTurn && ticketData.currentTurn !== req.userId) {
       return res.status(403).json({ error: 'Not your turn' });
     }
+
     const userDoc = await db.collection('users').doc(req.userId).get();
     const username = userDoc.data().username;
+
     await db.collection('tickets').doc(ticketId).collection('messages').add({
       userId: req.userId,
       username: username,
       message,
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
+
+    let stageUpdated = false;
+    if (ticketData.stage === 'Pending Review' && ticketData.createdBy !== username) {
+      await db.collection('tickets').doc(ticketId).update({
+        stage: 'Under Review',
+        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+      });
+      stageUpdated = true;
+    }
+
     // Update turn
-    const usersSnapshot = await db.collection('users').get();
-    const userIds = usersSnapshot.docs.map(doc => doc.id);
-    const currentIndex = userIds.indexOf(req.userId);
-    const nextTurn = userIds[(currentIndex + 1) % userIds.length];
+    const nextTurn = null; // Reset turn after each message
     await db.collection('tickets').doc(ticketId).update({ 
       currentTurn: nextTurn,
       lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
     });
-    res.json({ success: true, nextTurn });
+
+    res.json({ success: true, nextTurn, stageUpdated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add a user to the turn queue
+app.post('/api/tickets/:ticketId/queue', verifyToken, async (req, res) => {
+  const ticketId = req.params.ticketId;
+  try {
+    const ticketRef = db.collection('tickets').doc(ticketId);
+    await db.runTransaction(async (transaction) => {
+      const ticketDoc = await transaction.get(ticketRef);
+      if (!ticketDoc.exists) {
+        throw new Error('Ticket not found');
+      }
+      const ticketData = ticketDoc.data();
+      let queue = ticketData.queue || [];
+      if (!queue.includes(req.userId)) {
+        queue.push(req.userId);
+        transaction.update(ticketRef, { queue });
+      }
+      if (!ticketData.currentTurn) {
+        transaction.update(ticketRef, { currentTurn: queue[0] });
+      }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get the current turn for a ticket
+app.get('/api/tickets/:ticketId/turn', verifyToken, async (req, res) => {
+  const ticketId = req.params.ticketId;
+  try {
+    const ticketDoc = await db.collection('tickets').doc(ticketId).get();
+    if (!ticketDoc.exists) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    const ticketData = ticketDoc.data();
+    res.json({ currentTurn: ticketData.currentTurn, queue: ticketData.queue || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -15,7 +15,7 @@
         $(document).ready(function() {
             const token = localStorage.getItem('token');
             if (!token) {
-                window.location.href = 'login.html';
+                window.location.href = 'index.html';
                 return;
             }
 
@@ -24,8 +24,15 @@
                 method: 'GET',
                 headers: { 'Authorization': token },
                 success: function(tickets) {
+                    const sortedTickets = tickets.sort((a, b) => {
+                        if (a.priority === b.priority) {
+                            return new Date(a.creationDate) - new Date(b.creationDate);
+                        }
+                        return a.priority === 'High' ? -1 : 1;
+                    });
+
                     const ticketList = $('#ticket-list');
-                    tickets.forEach(ticket => {
+                    sortedTickets.forEach(ticket => {
                         ticketList.append(`
                             <li>
                                 <a href="ticket-chat.html?id=${ticket.id}">
@@ -39,7 +46,7 @@
                 error: function(xhr) {
                     if (xhr.status === 401) {
                         alert('Session expired. Please log in again.');
-                        window.location.href = 'login.html';
+                        window.location.href = 'index.html';
                     } else {
                         alert('Failed to fetch tickets: ' + xhr.responseJSON.error);
                     }

@@ -21,6 +21,7 @@
         let currentTicketId;
         const token = localStorage.getItem('token');
         const currentUserId = localStorage.getItem('userId');
+        const currentUsername = localStorage.getItem('username');
 
         function loadTicketInfo() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -38,6 +39,9 @@
                             <p>Stage: ${ticket.stage}</p>
                             <p>Priority: ${ticket.priority}</p>
                         `);
+                        if (ticket.stage === 'Unseen' && ticket.createdBy !== currentUsername) {
+                            updateTicketStage('Pending Review');
+                        }
                         checkTurn(ticket.currentTurn);
                         loadMessages();
                     },
@@ -45,15 +49,31 @@
                         console.error('Failed to load ticket info:', xhr.responseJSON.error);
                         if (xhr.status === 401) {
                             alert('Session expired. Please log in again.');
-                            window.location.href = 'login.html';
+                            window.location.href = 'index.html';
                         }
                     }
                 });
             }
         }
 
+        function updateTicketStage(newStage) {
+            $.ajax({
+                url: `/api/tickets/${currentTicketId}/stage`,
+                method: 'PUT',
+                headers: { 'Authorization': token },
+                contentType: 'application/json',
+                data: JSON.stringify({ stage: newStage }),
+                success: function() {
+                    loadTicketInfo();
+                },
+                error: function(xhr) {
+                    console.error('Failed to update ticket stage:', xhr.responseJSON.error);
+                }
+            });
+        }
+
         function checkTurn(currentTurn) {
-            if (currentTurn === currentUserId) {
+            if (!currentTurn) {
                 $('#turn-info').text("It's your turn!");
                 $('#message-input, #send-button').prop('disabled', false);
             } else {
@@ -73,12 +93,14 @@
                 success: function(response) {
                     $('#message-input').val('');
                     loadMessages();
-                    checkTurn(response.nextTurn);
+                    if (response.stageUpdated) {
+                        loadTicketInfo();
+                    }
                 },
                 error: function(xhr) {
                     if (xhr.status === 401) {
                         alert('Session expired. Please log in again.');
-                        window.location.href = 'login.html';
+                        window.location.href = 'index.html';
                     } else {
                         alert('Failed to send message: ' + xhr.responseJSON.error);
                     }
@@ -101,7 +123,7 @@
                     console.error('Failed to load messages:', xhr.responseJSON.error);
                     if (xhr.status === 401) {
                         alert('Session expired. Please log in again.');
-                        window.location.href = 'login.html';
+                        window.location.href = 'index.html';
                     }
                 }
             });
@@ -109,7 +131,7 @@
 
         $(document).ready(function() {
             if (!token) {
-                window.location.href = 'login.html';
+                window.location.href = 'index.html';
                 return;
             }
             loadTicketInfo();
