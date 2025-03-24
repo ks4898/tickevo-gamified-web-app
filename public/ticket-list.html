@@ -49,6 +49,7 @@
                         window.location.href = 'index.html';
                     } else {
                         alert('Failed to fetch tickets: ' + xhr.responseJSON.error);
+                        console.log(xhr.responseJSON.error);
                     }
                 }
             });
