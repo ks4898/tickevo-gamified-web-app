@@ -139,9 +139,13 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     if (ticket.stage === 'Unseen' && ticket.createdId !== req.userId) {
       await ticketRef.update({
         stage: 'Pending Review',
-        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
+        queue: [req.userId],
+        currentTurn: req.userId
       });
       ticket.stage = 'Pending Review';
+      ticket.queue = [req.userId];
+      ticket.currentTurn = req.userId;
 
       // Add ticket action
       await db.collection('ticketActions').add({
@@ -153,29 +157,12 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       });
     }
 
-    // Add user to queue if not already in it and not the creator
-    if (!ticket.queue) {
-      ticket.queue = [];
-    }
-    if (!ticket.queue.includes(req.userId) && ticket.createdId !== req.userId) {
-      await ticketRef.update({
-        queue: admin.firestore.FieldValue.arrayUnion(req.userId)
-      });
-      ticket.queue.push(req.userId);
-    }
-
-    // Set current turn if not set
-    if (!ticket.currentTurn && ticket.queue.length > 0) {
-      const nextTurn = ticket.queue[0];
-      await ticketRef.update({ currentTurn: nextTurn });
-      ticket.currentTurn = nextTurn;
-    }
-
     res.json(ticket);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Join ticket queue
 app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
@@ -223,16 +210,14 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   const ticketId = req.params.ticketId;
   try {
     const ticketRef = db.collection('tickets').doc(ticketId);
-    let stageUpdated = false;
-    let nextTurn = null;
-
+    
     await db.runTransaction(async (transaction) => {
       const ticketDoc = await transaction.get(ticketRef);
       if (!ticketDoc.exists) {
         throw new Error('Ticket not found');
       }
       const ticketData = ticketDoc.data();
-
+      
       if (ticketData.currentTurn && ticketData.currentTurn !== req.userId) {
         throw new Error('Not your turn');
       }
@@ -250,7 +235,8 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       });
 
       // Update stage if necessary
-      if (ticketData.stage === 'Pending Review') {
+      let stageUpdated = false;
+      if (ticketData.stage === 'Pending Review' && ticketData.createdId !== req.userId) {
         transaction.update(ticketRef, { stage: 'Under Review' });
         stageUpdated = true;
       }
@@ -258,20 +244,12 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       // Update turn
       let queue = ticketData.queue || [];
       queue = queue.filter(id => id !== req.userId);
+      let nextTurn = null;
       if (queue.length > 0) {
         nextTurn = queue[0];
-      } else if (ticketData.createdBy !== req.userId) {
-        nextTurn = ticketData.createdBy;
-        queue.push(ticketData.createdBy);
-      } else {
-        const allUsers = await db.collection('users').get();
-        const availableUsers = allUsers.docs
-          .map(doc => doc.id)
-          .filter(id => id !== req.userId && id !== ticketData.createdBy);
-        if (availableUsers.length > 0) {
-          nextTurn = availableUsers[0];
-          queue.push(nextTurn);
-        }
+      } else if (ticketData.createdId !== req.userId) {
+        nextTurn = ticketData.createdId;
+        queue.push(ticketData.createdId);
       }
 
       transaction.update(ticketRef, {
@@ -281,7 +259,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       });
     });
 
-    res.json({ success: true, nextTurn, stageUpdated });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
