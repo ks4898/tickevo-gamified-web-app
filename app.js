@@ -179,37 +179,47 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
 
 // add sample data for test
 async function addSampleData() {
+  try {
+    // Add sample users
     const users = [
-        { username: 'user1', password: 'password1', exp: 100, ticketTokens: 50 },
-        { username: 'user2', password: 'password2', exp: 150, ticketTokens: 75 }
-    ];
-
-    const tickets = [
-        { stage: 'Unseen', priority: 'Normal', createdBy: 'user1', currentTurn: 'user2' },
-        { stage: 'Under Review', priority: 'High', createdBy: 'user2', currentTurn: 'user1' }
+      { username: 'user1', password: await bcrypt.hash('password1', 10), exp: 100, ticketTokens: 50, badges: ['Helper'] },
+      { username: 'user2', password: await bcrypt.hash('password2', 10), exp: 150, ticketTokens: 75, badges: ['Helper', 'Lurker'] },
+      { username: 'user3', password: await bcrypt.hash('password3', 10), exp: 200, ticketTokens: 100, badges: ['Helper', 'Analyst'] }
     ];
 
     for (const user of users) {
-        const hashedPassword = await bcrypt.hash(user.password, 10);
-        await db.collection('users').add({
-            ...user,
-            password: hashedPassword,
-            badges: []
-        });
+      await db.collection('users').add(user);
     }
 
+    // Add sample tickets
+    const tickets = [
+      { title: 'Bug in login page', description: 'Users unable to log in', createdBy: 'user1', creationDate: admin.firestore.FieldValue.serverTimestamp(), lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(), stage: 'Unseen', priority: 'Normal', currentTurn: 'user2' },
+      { title: 'Feature request: Dark mode', description: 'Implement dark mode for better user experience', createdBy: 'user2', creationDate: admin.firestore.FieldValue.serverTimestamp(), lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(), stage: 'Pending Review', priority: 'High', currentTurn: 'user3' },
+      { title: 'Performance optimization needed', description: 'App is slow on older devices', createdBy: 'user3', creationDate: admin.firestore.FieldValue.serverTimestamp(), lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(), stage: 'Under Review', priority: 'Normal', currentTurn: 'user1' }
+    ];
+
     for (const ticket of tickets) {
-        await db.collection('tickets').add({
-            ...ticket,
-            creationDate: admin.firestore.FieldValue.serverTimestamp(),
-            lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
-        });
+      const ticketRef = await db.collection('tickets').add(ticket);
+      
+      // Add sample messages for each ticket
+      const messages = [
+        { userId: 'user1', username: 'user1', message: 'I can reproduce this issue', timestamp: admin.firestore.FieldValue.serverTimestamp() },
+        { userId: 'user2', username: 'user2', message: 'Let me take a look at it', timestamp: admin.firestore.FieldValue.serverTimestamp() },
+        { userId: 'user3', username: 'user3', message: 'I think I found the problem', timestamp: admin.firestore.FieldValue.serverTimestamp() }
+      ];
+
+      for (const message of messages) {
+        await db.collection('tickets').doc(ticketRef.id).collection('messages').add(message);
+      }
     }
 
     console.log('Sample data added successfully');
+  } catch (error) {
+    console.error('Error adding sample data:', error);
+  }
 }
 
-//addSampleData(); // call function to add sample data
+addSampleData(); // call function to add sample data
 
 // start server
 app.listen(port, () => {
