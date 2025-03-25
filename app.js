@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Initialize Firebase Admin SDK
+// init Firebase admin SDK
 const serviceAccount = require('./tickevo-ticket-evolution-firebase-adminsdk-fbsvc-6e628ddddb.json');
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -21,7 +21,7 @@ const db = admin.firestore();
 // JWT secret key
 const JWT_SECRET = '70724d8d89b3766b4b45cf61838142419d7ab90c7f6556577e94bbb9fa03a1fdad18cf5c8d27bcfe250eac323b5a7de9d9d4d60d68f0d2052b2b96a15b41a15b78697fb61f6810d3b37662bd0e194dd2da4d94de45268c1172ffc4950cc560b123cd9f4d5524995b2922bed0b3eda3389dce26e627b6bd34d80220534f4123a514bbc50ca21ebe66e27bc8b7facf8654eaa97e6c56e1af2d9c972072cd4a0a46431713470b463cfd12c54ee84ae0fb8dc99eb543ea29db38ca7bfd1f821b1919558f5dc8a7a6e9967cbc822dcd5f2c727217dbfe606726741ebd0b1c543ad12b762e9560a4951d0fdcd10c63c76b72efb76c4a26fca66ddadcad9c105748f59e';
 
-// Middleware to verify JWT token
+// middleware to verify JWT token
 const verifyToken = (req, res, next) => {
   const token = req.headers['authorization'];
   if (!token) return res.status(403).json({ error: 'No token provided' });
@@ -32,7 +32,7 @@ const verifyToken = (req, res, next) => {
   });
 };
 
-// Login endpoint
+// login endpoint
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -53,7 +53,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Signup endpoint
+// signup endpoint
 app.post('/api/signup', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -75,7 +75,7 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
-// Create a new ticket
+// create a new ticket
 app.post('/api/create-ticket', verifyToken, async (req, res) => {
   const { title, description, priority } = req.body;
   try {
@@ -88,10 +88,10 @@ app.post('/api/create-ticket', verifyToken, async (req, res) => {
       createdId: req.userId,
       creationDate: admin.firestore.FieldValue.serverTimestamp(),
       lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
-      stage: 'Unseen',
-      priority: priority || 'Normal',
-      currentTurn: null,
-      queue: []
+      stage: 'Unseen', // Unseen by def
+      priority: priority || 'Normal', // Normal by def
+      currentTurn: null, // no one's turn by def
+      queue: [] // empty turn que by def
     });
     res.json({ success: true, ticketId: newTicket.id });
   } catch (error) {
@@ -99,7 +99,7 @@ app.post('/api/create-ticket', verifyToken, async (req, res) => {
   }
 });
 
-// Get all tickets
+// get all tickets
 app.get('/api/tickets', verifyToken, async (req, res) => {
   try {
     const ticketsSnapshot = await db.collection('tickets').get();
@@ -108,7 +108,7 @@ app.get('/api/tickets', verifyToken, async (req, res) => {
       ...doc.data()
     }));
 
-    // Sort tickets by priority (High first) and then alphabetically by title
+    // sort tickets by priority (High first) and then alphabetically by title (to be changed to older first)
     tickets.sort((a, b) => {
       if (a.priority === b.priority) {
         return a.title.localeCompare(b.title);
@@ -122,7 +122,7 @@ app.get('/api/tickets', verifyToken, async (req, res) => {
   }
 });
 
-// Get a specific ticket
+// get a specific ticket
 app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
   try {
     const ticketRef = db.collection('tickets').doc(req.params.ticketId);
@@ -136,30 +136,31 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     };
 
     const currentTime = admin.firestore.Timestamp.now();
-    const timeDiff = currentTime.seconds - ticket.lastUpdateDate.seconds;
+    const timeDiff = currentTime.seconds - ticket.lastUpdateDate.seconds; // time since ticket has been updated
 
-    if (timeDiff > 60) { // 2 minutes
+    if (timeDiff > 60) { // 1 minute before reseting the turn and turn queue
       let queue = ticket.queue || [];
       let nextTurn = null;
 
-      // Add creator to queue if not already present and ticket is past "Pending Review"
+      // add creator to queue if not already present and ticket is past "Pending Review"
       if (ticket.stage !== 'Unseen' && ticket.stage !== 'Pending Review' && !queue.includes(ticket.createdId)) {
         queue.push(ticket.createdId);
       }
 
-      // Remove current turn holder if they're in the queue
+      // remove current turn holder if they're in the queue
       if (ticket.currentTurn) {
         queue = queue.filter(id => id !== ticket.currentTurn);
       }
 
-      // Add new user to queue if not already present
+      // add new user to queue if not already present
       if (!queue.includes(req.userId) && req.userId !== ticket.createdId) {
         queue.push(req.userId);
       }
 
-      // Set new turn
+      // set new turn
       nextTurn = queue.length > 0 ? queue[0] : null;
 
+      // update new turn
       await ticketRef.update({
         currentTurn: nextTurn,
         queue: queue,
@@ -171,7 +172,7 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       ticket.lastUpdateDate = currentTime;
     }
 
-    // Update stage if necessary and viewer is not the creator
+    // update stage if necessary and viewer is not the creator
     if (ticket.stage === 'Unseen' && ticket.createdId !== req.userId) {
       await ticketRef.update({
         stage: 'Pending Review',
@@ -179,7 +180,7 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       });
       ticket.stage = 'Pending Review';
 
-      // Add ticket action
+      // add ticket View action
       await db.collection('ticketActions').add({
         userId: req.userId,
         ticketId: req.params.ticketId,
@@ -195,7 +196,7 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
   }
 });
 
-// Join ticket queue
+// join ticket queue
 app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
   try {
     const ticketRef = db.collection('tickets').doc(req.params.ticketId);
@@ -221,7 +222,7 @@ app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
   }
 });
 
-// Send a message in a ticket's chat
+// send a message in a ticket's chat
 app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   const { message } = req.body;
   const ticketId = req.params.ticketId;
@@ -242,7 +243,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       const userDoc = await db.collection('users').doc(req.userId).get();
       const username = userDoc.data().username;
 
-      // Add message
+      // add message
       const messageRef = ticketRef.collection('messages').doc();
       transaction.set(messageRef, {
         userId: req.userId,
@@ -251,6 +252,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
+      // add Review ticket action
       await db.collection('ticketActions').add({
         userId: req.userId,
         ticketId: req.params.ticketId,
@@ -259,7 +261,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         details: 'Ticket reviewed by user'
       });
 
-      // Update stage if necessary
+      // update stage if necessary
       if (ticketData.stage === 'Pending Review' && ticketData.createdId !== req.userId) {
         transaction.update(ticketRef, {
           stage: 'Under Review',
@@ -267,11 +269,11 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         });
       }
 
-      // Update turn
+      // update ticket turn
       let queue = ticketData.queue || [];
       queue = queue.filter(id => id !== req.userId);
 
-      // Add creator back to queue if not present and ticket is past "Pending Review"
+      // add creator back to queue if not present and ticket is past "Pending Review" stage
       if (ticketData.stage !== 'Unseen' && ticketData.stage !== 'Pending Review' && !queue.includes(ticketData.createdId)) {
         queue.push(ticketData.createdId);
       }
@@ -297,11 +299,11 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   }
 });
 
-// Get chat messages for a specific ticket
+// get chat messages for a specific ticket
 app.get('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   try {
     const messagesSnapshot = await db.collection('tickets').doc(req.params.ticketId).collection('messages')
-      .orderBy('timestamp', 'asc')
+      .orderBy('timestamp', 'asc') // ascending order
       .get();
     const messages = messagesSnapshot.docs.map(doc => ({
       id: doc.id,
@@ -313,7 +315,7 @@ app.get('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   }
 });
 
-// add sample data for test
+// add sample data for test ...DEPRECATED...
 async function addSampleData() {
   try {
     // Add sample users
