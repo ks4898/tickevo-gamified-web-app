@@ -130,7 +130,7 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     if (!ticketDoc.exists) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    const ticket = {
+    let ticket = {
       id: ticketDoc.id,
       ...ticketDoc.data()
     };
@@ -140,15 +140,19 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
 
     if (timeDiff > 120) { // 2 minutes
       let queue = ticket.queue || [];
-      let nextTurn = null;
-
+      
+      // Remove current turn holder if they're in the queue
+      if (ticket.currentTurn) {
+        queue = queue.filter(id => id !== ticket.currentTurn);
+      }
+      
+      // Add new user to queue if not already present
       if (!queue.includes(req.userId) && req.userId !== ticket.createdId) {
         queue.push(req.userId);
       }
 
-      if (queue.length > 0) {
-        nextTurn = queue[0];
-      }
+      // Set new turn
+      const nextTurn = queue.length > 0 ? queue[0] : null;
 
       await ticketRef.update({
         currentTurn: nextTurn,
