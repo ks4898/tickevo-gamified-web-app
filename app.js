@@ -157,7 +157,17 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       });
     }
 
-    res.json(ticket);
+    // Check and update turn if necessary
+    await checkAndUpdateTurn(req.params.ticketId);
+
+    // Fetch the updated ticket data
+    const updatedTicketDoc = await ticketRef.get();
+    const updatedTicket = {
+      id: updatedTicketDoc.id,
+      ...updatedTicketDoc.data()
+    };
+
+    res.json(updatedTicket);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -281,24 +291,28 @@ app.get('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   }
 });
 
-app.post('/api/tickets/:ticketId/update-turn', verifyToken, async (req, res) => {
-  try {
-    const ticketRef = db.collection('tickets').doc(req.params.ticketId);
+async function checkAndUpdateTurn(ticketId) {
+  const ticketRef = db.collection('tickets').doc(ticketId);
 
-    await db.runTransaction(async (transaction) => {
-      const ticketDoc = await transaction.get(ticketRef);
-      if (!ticketDoc.exists) {
-        throw new Error('Ticket not found');
-      }
-      const ticketData = ticketDoc.data();
+  await db.runTransaction(async (transaction) => {
+    const ticketDoc = await transaction.get(ticketRef);
+    if (!ticketDoc.exists) {
+      throw new Error('Ticket not found');
+    }
+    const ticketData = ticketDoc.data();
 
+    const lastUpdateTime = ticketData.lastUpdateDate.toDate();
+    const currentTime = new Date();
+    const timeDiff = (currentTime - lastUpdateTime) / 1000; // in seconds
+
+    if (timeDiff > 120 && ticketData.currentTurn) { // 2 minutes
       let queue = ticketData.queue || [];
       let nextTurn = null;
 
       if (queue.length > 0) {
-        nextTurn = queue[0];
-        queue = queue.slice(1);
-        queue.push(nextTurn);
+        nextTurn = queue.shift();
+      } else if (ticketData.stage !== 'Unseen' && ticketData.stage !== 'Pending Review') {
+        nextTurn = ticketData.createdId;
       }
 
       transaction.update(ticketRef, {
@@ -306,14 +320,9 @@ app.post('/api/tickets/:ticketId/update-turn', verifyToken, async (req, res) => 
         queue: queue,
         lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
       });
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
+    }
+  });
+}
 
 // add sample data for test
 async function addSampleData() {
