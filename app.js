@@ -140,7 +140,7 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       await ticketRef.update({
         stage: 'Pending Review',
         lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
-        queue: [req.userId],
+        queue: admin.firestore.FieldValue.arrayUnion(req.userId),
         currentTurn: req.userId
       });
       ticket.stage = 'Pending Review';
@@ -162,7 +162,6 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 // Join ticket queue
 app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
@@ -218,7 +217,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       }
       const ticketData = ticketDoc.data();
 
-      if (ticketData.currentTurn && ticketData.currentTurn !== req.userId) {
+      if (ticketData.currentTurn !== req.userId) {
         throw new Error('Not your turn');
       }
 
@@ -235,10 +234,11 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       });
 
       // Update stage if necessary
-      let stageUpdated = false;
       if (ticketData.stage === 'Pending Review' && ticketData.createdId !== req.userId) {
-        transaction.update(ticketRef, { stage: 'Under Review', lastUpdateDate: admin.firestore.FieldValue.serverTimestamp() });
-        stageUpdated = true;
+        transaction.update(ticketRef, {
+          stage: 'Under Review',
+          lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+        });
       }
 
       // Update turn
