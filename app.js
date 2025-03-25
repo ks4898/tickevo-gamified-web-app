@@ -213,20 +213,6 @@ app.post('/api/tickets/:ticketId/join-queue', verifyToken, async (req, res) => {
   }
 });
 
-// Update ticket stage
-app.put('/api/tickets/:ticketId/stage', verifyToken, async (req, res) => {
-  const { stage } = req.body;
-  try {
-    await db.collection('tickets').doc(req.params.ticketId).update({
-      stage,
-      lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
-    });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Send a message in a ticket's chat
 app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   const { message } = req.body;
