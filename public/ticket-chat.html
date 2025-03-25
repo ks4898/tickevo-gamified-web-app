@@ -146,6 +146,37 @@
             });
         }
 
+        function checkAndUpdateTurn() {
+            $.ajax({
+                url: `/api/tickets/${currentTicketId}`,
+                method: 'GET',
+                headers: { 'Authorization': token },
+                success: function (ticket) {
+                    const lastUpdateTime = new Date(ticket.lastUpdateDate.seconds * 1000);
+                    const currentTime = new Date();
+                    const timeDiff = (currentTime - lastUpdateTime) / 1000; // in seconds
+
+                    if (timeDiff > 120) { // 2 minutes
+                        $.ajax({
+                            url: `/api/tickets/${currentTicketId}/update-turn`,
+                            method: 'POST',
+                            headers: { 'Authorization': token },
+                            success: function () {
+                                loadTicketInfo();
+                            },
+                            error: function (xhr) {
+                                console.error('Failed to update turn:', xhr.responseJSON.error);
+                            }
+                        });
+                    }
+                },
+                error: function (xhr) {
+                    console.error('Failed to check ticket info:', xhr.responseJSON.error);
+                }
+            });
+        }
+
+
         $(document).ready(function () {
             if (!token) {
                 window.location.href = 'index.html';
@@ -154,6 +185,7 @@
             loadTicketInfo();
             setInterval(loadMessages, 5000);
             setInterval(loadTicketInfo, 5000);
+            setInterval(checkAndUpdateTurn, 30000);
         });
     </script>
 </body>

@@ -210,14 +210,14 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   const ticketId = req.params.ticketId;
   try {
     const ticketRef = db.collection('tickets').doc(ticketId);
-    
+
     await db.runTransaction(async (transaction) => {
       const ticketDoc = await transaction.get(ticketRef);
       if (!ticketDoc.exists) {
         throw new Error('Ticket not found');
       }
       const ticketData = ticketDoc.data();
-      
+
       if (ticketData.currentTurn && ticketData.currentTurn !== req.userId) {
         throw new Error('Not your turn');
       }
@@ -280,6 +280,40 @@ app.get('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.post('/api/tickets/:ticketId/update-turn', verifyToken, async (req, res) => {
+  try {
+    const ticketRef = db.collection('tickets').doc(req.params.ticketId);
+
+    await db.runTransaction(async (transaction) => {
+      const ticketDoc = await transaction.get(ticketRef);
+      if (!ticketDoc.exists) {
+        throw new Error('Ticket not found');
+      }
+      const ticketData = ticketDoc.data();
+
+      let queue = ticketData.queue || [];
+      let nextTurn = null;
+
+      if (queue.length > 0) {
+        nextTurn = queue[0];
+        queue = queue.slice(1);
+        queue.push(nextTurn);
+      }
+
+      transaction.update(ticketRef, {
+        currentTurn: nextTurn,
+        queue: queue,
+        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
+      });
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // add sample data for test
 async function addSampleData() {
