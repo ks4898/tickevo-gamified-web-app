@@ -108,7 +108,7 @@ app.get('/api/tickets', verifyToken, async (req, res) => {
       ...doc.data()
     }));
 
-    // sort tickets by priority (High first) and then alphabetically by title (to be changed to older first)
+    // sort tickets by priority (High first) and then alphabetically by title (to be changed to timebomb -> high -> older first)
     tickets.sort((a, b) => {
       if (a.priority === b.priority) {
         return a.title.localeCompare(b.title);

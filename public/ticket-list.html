@@ -29,7 +29,7 @@
                     const ticketList = $('#ticket-list');
                     ticketList.empty();
                     tickets.forEach(ticket => {
-                        if (ticket.createdId !== "") {   // due to the default empty collections in Firestore, it must be excluded
+                        if (ticket.createdId !== "") {   // must be excluded due to the default empty collections in Firestore for fields
                             ticketList.append(`
                             <li>
                                 <a href="ticket-chat.html?id=${ticket.id}">
