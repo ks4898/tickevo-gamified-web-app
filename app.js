@@ -237,7 +237,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       // Update stage if necessary
       let stageUpdated = false;
       if (ticketData.stage === 'Pending Review' && ticketData.createdId !== req.userId) {
-        transaction.update(ticketRef, { stage: 'Under Review' });
+        transaction.update(ticketRef, { stage: 'Under Review', lastUpdateDate: admin.firestore.FieldValue.serverTimestamp() });
         stageUpdated = true;
       }
 

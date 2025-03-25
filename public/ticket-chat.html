@@ -37,20 +37,22 @@
                         $('#ticket-info').html(`
                             <h3>${ticket.title}</h3>
                             <p>Created by: ${ticket.createdBy}</p>
-                            <p>Description: ${ticket.description}</p>
-                            <p>Stage: ${ticket.stage}</p>
-                            <p>Priority: ${ticket.priority}</p>
+                            <p>Overview: ${ticket.description}</p>
+                            <p>Completion Stage: ${ticket.stage}</p>
+                            <p>Ticket Priority: ${ticket.priority}</p>
                         `);
                         checkTurn(ticket);
                         loadMessages();
                     },
                     error: function (xhr) {
-                        console.error('Failed to load ticket info:', xhr.responseJSON.error);
                         if (xhr.status === 401) {
-                            alert('Session expired. Please log in again.');
+                            localStorage.clear();
                             window.location.href = 'index.html';
+                        } else {
+                            alert('An error occurred: ' + xhr.responseJSON.error);
                         }
                     }
+
                 });
             }
         }

@@ -33,9 +33,9 @@
                             ticketList.append(`
                             <li>
                                 <a href="ticket-chat.html?id=${ticket.id}">
-                                    ${ticket.title} - ${ticket.stage} (${ticket.priority})
+                                    ${ticket.title} [ ${ticket.stage} ] (Priority: ${ticket.priority})
                                 </a>
-                                <p>Created by: ${ticket.createdBy}</p>
+                                <p>Author: ${ticket.createdBy}</p>
                             </li>
                         `);
                         }
@@ -43,12 +43,13 @@
                 },
                 error: function (xhr) {
                     if (xhr.status === 401) {
-                        alert('Session expired. Please log in again.');
+                        localStorage.clear();
                         window.location.href = 'index.html';
                     } else {
-                        alert('Failed to fetch tickets: ' + xhr.responseJSON.error);
+                        alert('An error occurred: ' + xhr.responseJSON.error);
                     }
                 }
+
             });
         }
 

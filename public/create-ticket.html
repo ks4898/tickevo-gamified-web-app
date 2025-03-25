@@ -6,14 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TickEvo - Create Ticket</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-        (function () {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                window.location.href = 'index.html';
-            }
-        })();
-    </script>
 </head>
 
 <body>
@@ -49,7 +41,7 @@
                     },
                     error: function (xhr) {
                         if (xhr.status === 401) {
-                            alert('Session expired. Please log in again.');
+                            localStorage.clear();
                             window.location.href = 'login.html';
                         } else {
                             alert('Failed to create ticket: ' + xhr.responseJSON.error);
