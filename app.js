@@ -138,14 +138,16 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     const currentTime = admin.firestore.Timestamp.now();
     const timeDiff = currentTime.seconds - ticket.lastUpdateDate.seconds;
 
-    if (timeDiff > 120 && ticket.currentTurn) { // 2 minutes
+    if (timeDiff > 120) { // 2 minutes
       let queue = ticket.queue || [];
       let nextTurn = null;
 
+      if (!queue.includes(req.userId) && req.userId !== ticket.createdId) {
+        queue.push(req.userId);
+      }
+
       if (queue.length > 0) {
-        nextTurn = queue.shift();
-      } else if (ticket.stage !== 'Unseen' && ticket.createdId !== req.userId) {
-        nextTurn = req.userId;
+        nextTurn = queue[0];
       }
 
       await ticketRef.update({
@@ -164,12 +166,8 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
       await ticketRef.update({
         stage: 'Pending Review',
         lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
-        queue: admin.firestore.FieldValue.arrayUnion(req.userId),
-        currentTurn: req.userId
       });
       ticket.stage = 'Pending Review';
-      ticket.queue = [req.userId];
-      ticket.currentTurn = req.userId;
 
       // Add ticket action
       await db.collection('ticketActions').add({
@@ -241,6 +239,14 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         username: username,
         message,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      await db.collection('ticketActions').add({
+        userId: req.userId,
+        ticketId: req.params.ticketId,
+        actionType: 'Review',
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        details: 'Ticket reviewed by user'
       });
 
       // Update stage if necessary
