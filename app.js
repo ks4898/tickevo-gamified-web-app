@@ -318,7 +318,7 @@ app.get('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
 // add sample data for test ...DEPRECATED...
 async function addSampleData() {
   try {
-    // Add sample users
+    // add sample users
     const users = [
       { username: 'user1', password: await bcrypt.hash('password1', 10), exp: 100, ticketTokens: 50, badges: ['Helper'] },
       { username: 'user2', password: await bcrypt.hash('password2', 10), exp: 150, ticketTokens: 75, badges: ['Helper', 'Lurker'] },
@@ -331,7 +331,7 @@ async function addSampleData() {
       userRefs.push(userRef);
     }
 
-    /*// Add sample tickets
+    /*// add sample tickets
     const tickets = [
       { title: 'Bug in login page', description: 'Users unable to log in', createdBy: 'user1', creationDate: admin.firestore.FieldValue.serverTimestamp(), lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(), stage: 'Unseen', priority: 'Normal', currentTurn: null },
       { title: 'Feature request: Dark mode', description: 'Implement dark mode for better user experience', createdBy: 'user2', creationDate: admin.firestore.FieldValue.serverTimestamp(), lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(), stage: 'Pending Review', priority: 'High', currentTurn: null },
@@ -341,7 +341,7 @@ async function addSampleData() {
     for (const ticket of tickets) {
       const ticketRef = await db.collection('tickets').add(ticket);
     }
-      // Add sample messages for each ticket
+      // add sample messages for each ticket
       const messages = [
         { userId: userRefs[0].id, username: 'user1', message: 'I can reproduce this issue', timestamp: admin.firestore.FieldValue.serverTimestamp() },
         { userId: userRefs[1].id, username: 'user2', message: 'Let me take a look at it', timestamp: admin.firestore.FieldValue.serverTimestamp() },
@@ -352,7 +352,7 @@ async function addSampleData() {
         await db.collection('tickets').doc(ticketRef.id).collection('messages').add(message);
       }
 
-      // Add sample ticket actions
+      // add sample ticket actions
       const actions = [
         { userId: userRefs[0].id, ticketId: ticketRef.id, actionType: 'Create', timestamp: admin.firestore.FieldValue.serverTimestamp(), details: 'Ticket created' },
         { userId: userRefs[1].id, ticketId: ticketRef.id, actionType: 'View', timestamp: admin.firestore.FieldValue.serverTimestamp(), details: 'Ticket viewed' },
@@ -364,7 +364,7 @@ async function addSampleData() {
       }
     }
 
-    // Add sample team
+    // add sample team
     const team = {
       name: 'Dream Team',
       members: userRefs.map(ref => ref.id),
@@ -373,7 +373,7 @@ async function addSampleData() {
     };
     await db.collection('teams').add(team);
 
-    // Add sample leaderboard
+    // add sample leaderboard
     const leaderboard = {
       type: 'Individual',
       entries: [
@@ -385,7 +385,7 @@ async function addSampleData() {
     };
     await db.collection('leaderboards').add(leaderboard);
 
-    // Add sample badges
+    // add sample badges
     const badges = [
       { name: 'Helper', description: 'Assisted in solving tickets', levels: [{ level: 1, requirements: 'Help solve 5 tickets', rewards: '10 Ticket Tokens' }] },
       { name: 'Lurker', description: 'Viewed many tickets', levels: [{ level: 1, requirements: 'View 10 tickets', rewards: '5 Ticket Tokens' }] },
