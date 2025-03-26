@@ -130,62 +130,48 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     if (!ticketDoc.exists) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    let ticket = {
-      id: ticketDoc.id,
-      ...ticketDoc.data()
-    };
+    let ticket = ticketDoc.data();
+    ticket.id = ticketDoc.id;
 
     const currentTime = admin.firestore.Timestamp.now();
-    const timeDiff = currentTime.seconds - ticket.lastUpdateDate.seconds; // time since ticket has been updated
+    const timeDiff = currentTime.seconds - ticket.lastUpdateDate.seconds;
 
-    if (timeDiff > 60) { // 1 minute before reseting the turn and turn queue
+    // Add viewer to queue if not already present and not the creator
+    if (req.userId !== ticket.createdId && !ticket.queue.includes(req.userId)) {
+      ticket.queue.push(req.userId);
+      await ticketRef.update({ queue: ticket.queue });
+    }
+
+    // Reset turn after 1 minute of inactivity
+    if (timeDiff > 60 && ticket.currentTurn) {
       let queue = ticket.queue || [];
-      let nextTurn = null;
+      let nextTurn = queue.length > 0 ? queue[0] : null;
 
-      // add creator to queue if not already present and ticket is past "Pending Review"
-      if (ticket.stage !== 'Unseen' && ticket.stage !== 'Pending Review' && !queue.includes(ticket.createdId)) {
-        queue.push(ticket.createdId);
-      }
-
-      // remove current turn holder if they're in the queue
-      if (ticket.currentTurn) {
-        queue = queue.filter(id => id !== ticket.currentTurn);
-      }
-
-      // add new user to queue if not already present
-      if (!queue.includes(req.userId) && req.userId !== ticket.createdId) {
-        queue.push(req.userId);
-      }
-
-      // set new turn
-      nextTurn = queue.length > 0 ? queue[0] : null;
-
-      // update new turn
       await ticketRef.update({
         currentTurn: nextTurn,
-        queue: queue,
+        queue: nextTurn ? queue.slice(1).concat(nextTurn) : queue,
         lastUpdateDate: currentTime
       });
 
       ticket.currentTurn = nextTurn;
-      ticket.queue = queue;
+      ticket.queue = nextTurn ? queue.slice(1).concat(nextTurn) : queue;
       ticket.lastUpdateDate = currentTime;
     }
 
-    // update stage if necessary and viewer is not the creator
+    // Update stage if necessary and viewer is not the creator
     if (ticket.stage === 'Unseen' && ticket.createdId !== req.userId) {
       await ticketRef.update({
         stage: 'Pending Review',
-        lastUpdateDate: admin.firestore.FieldValue.serverTimestamp(),
+        lastUpdateDate: currentTime
       });
       ticket.stage = 'Pending Review';
 
-      // add ticket View action
+      // Add ticket action
       await db.collection('ticketActions').add({
         userId: req.userId,
         ticketId: req.params.ticketId,
         actionType: 'View',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: currentTime,
         details: 'Ticket viewed for the first time'
       });
     }
@@ -236,14 +222,17 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       }
       const ticketData = ticketDoc.data();
 
-      if (ticketData.currentTurn !== req.userId) {
-        throw new Error('Not your turn');
+      // Check if it's the user's turn and not the creator in Unseen or Pending Review stages
+      if (ticketData.currentTurn !== req.userId ||
+        (ticketData.createdId === req.userId &&
+          (ticketData.stage === 'Unseen' || ticketData.stage === 'Pending Review'))) {
+        throw new Error('Not allowed to send message');
       }
 
       const userDoc = await db.collection('users').doc(req.userId).get();
       const username = userDoc.data().username;
 
-      // add message
+      // Add message
       const messageRef = ticketRef.collection('messages').doc();
       transaction.set(messageRef, {
         userId: req.userId,
@@ -252,16 +241,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // add Review ticket action
-      await db.collection('ticketActions').add({
-        userId: req.userId,
-        ticketId: req.params.ticketId,
-        actionType: 'Review',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        details: 'Ticket reviewed by user'
-      });
-
-      // update stage if necessary
+      // Update stage if necessary
       if (ticketData.stage === 'Pending Review' && ticketData.createdId !== req.userId) {
         transaction.update(ticketRef, {
           stage: 'Under Review',
@@ -269,20 +249,14 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         });
       }
 
-      // update ticket turn
+      // Update turn
       let queue = ticketData.queue || [];
       queue = queue.filter(id => id !== req.userId);
-
-      // add creator back to queue if not present and ticket is past "Pending Review" stage
-      if (ticketData.stage !== 'Unseen' && ticketData.stage !== 'Pending Review' && !queue.includes(ticketData.createdId)) {
-        queue.push(ticketData.createdId);
-      }
-
       let nextTurn = null;
+
       if (queue.length > 0) {
         nextTurn = queue[0];
-      } else if (ticketData.stage !== 'Unseen' && ticketData.stage !== 'Pending Review') {
-        nextTurn = ticketData.createdId;
+        queue = queue.slice(1).concat(nextTurn);
       }
 
       transaction.update(ticketRef, {
@@ -290,7 +264,6 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         queue: queue,
         lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
       });
-
     });
 
     res.json({ success: true });
