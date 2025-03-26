@@ -145,17 +145,28 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     // Reset turn after 1 minute of inactivity
     if (timeDiff > 60 && ticket.currentTurn) {
       let queue = ticket.queue || [];
-      let nextTurn = queue.length > 0 ? queue[0] : null;
-
+      let nextTurn = null;
+      
+      if (queue.length > 0) {
+        nextTurn = queue.shift();
+        queue.push(nextTurn);
+      }
+      
       await ticketRef.update({
         currentTurn: nextTurn,
-        queue: nextTurn ? queue.slice(1).concat(nextTurn) : queue,
+        queue: queue,
         lastUpdateDate: currentTime
       });
-
+      
       ticket.currentTurn = nextTurn;
-      ticket.queue = nextTurn ? queue.slice(1).concat(nextTurn) : queue;
+      ticket.queue = queue;
       ticket.lastUpdateDate = currentTime;
+    }
+
+    // Set turn if not set
+    if (!ticket.currentTurn && ticket.queue.length > 0) {
+      ticket.currentTurn = ticket.queue[0];
+      await ticketRef.update({ currentTurn: ticket.currentTurn });
     }
 
     // Update stage if necessary and viewer is not the creator
@@ -165,15 +176,6 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
         lastUpdateDate: currentTime
       });
       ticket.stage = 'Pending Review';
-
-      // Add ticket action
-      await db.collection('ticketActions').add({
-        userId: req.userId,
-        ticketId: req.params.ticketId,
-        actionType: 'View',
-        timestamp: currentTime,
-        details: 'Ticket viewed for the first time'
-      });
     }
 
     res.json(ticket);
@@ -214,17 +216,17 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   const ticketId = req.params.ticketId;
   try {
     const ticketRef = db.collection('tickets').doc(ticketId);
-
+    
     await db.runTransaction(async (transaction) => {
       const ticketDoc = await transaction.get(ticketRef);
       if (!ticketDoc.exists) {
         throw new Error('Ticket not found');
       }
       const ticketData = ticketDoc.data();
-
+      
       // Check if it's the user's turn and not the creator in Unseen or Pending Review stages
-      if (ticketData.currentTurn !== req.userId ||
-        (ticketData.createdId === req.userId &&
+      if (ticketData.currentTurn !== req.userId || 
+         (ticketData.createdId === req.userId && 
           (ticketData.stage === 'Unseen' || ticketData.stage === 'Pending Review'))) {
         throw new Error('Not allowed to send message');
       }
@@ -243,7 +245,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
 
       // Update stage if necessary
       if (ticketData.stage === 'Pending Review' && ticketData.createdId !== req.userId) {
-        transaction.update(ticketRef, {
+        transaction.update(ticketRef, { 
           stage: 'Under Review',
           lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
         });
@@ -253,10 +255,16 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       let queue = ticketData.queue || [];
       queue = queue.filter(id => id !== req.userId);
       let nextTurn = null;
-
+      
       if (queue.length > 0) {
         nextTurn = queue[0];
-        queue = queue.slice(1).concat(nextTurn);
+      } else if (ticketData.createdId !== req.userId) {
+        nextTurn = ticketData.createdId;
+        queue.push(ticketData.createdId);
+      }
+
+      if (nextTurn === null && queue.length > 0) {
+        nextTurn = queue[0];
       }
 
       transaction.update(ticketRef, {
