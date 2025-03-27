@@ -9,16 +9,18 @@
 </head>
 
 <body>
-    <div id="ticket-info"></div>
-    <div id="chat-room">
-        <h2>Chat Room</h2>
-        <div id="turn-info"></div>
-        <div id="messages"></div>
-        <input type="text" id="message-input" placeholder="Type a message...">
-        <button onclick="sendMessage()" id="send-button">Send</button>
+    <div style="padding: 1rem; display: flex; justify-content: center; gap: 5rem;">
+        <a href="ticket-list.html">Back to Ticket List</a>
+        <div id="ticket-info"></div>
+        <div id="chat-room">
+            <h2>Chat Room</h2>
+            <div id="turn-info"></div>
+            <div id="messages"></div>
+            <input type="text" id="message-input" placeholder="Type a message...">
+            <button onclick="sendMessage()" id="send-button">Send</button>
+        </div>
     </div>
-    <a href="ticket-list.html">Back to Ticket List</a>
-
+    
     <script>
         let currentTicketId;
         const token = localStorage.getItem('token');
@@ -50,6 +52,7 @@
                             window.location.href = 'index.html';
                         } else {
                             alert('An error occurred: ' + xhr.responseJSON.error);
+                            window.location.href = 'index.html';
                         }
                     }
 

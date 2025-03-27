@@ -9,9 +9,13 @@
 </head>
 
 <body>
-    <h1>Available Tickets</h1>
-    <ul id="ticket-list"></ul>
-    <a href="create-ticket.html">Create New Ticket</a>
+    <div
+        style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 5rem;">
+        <h1>Available Tickets</h1>
+        <ul id="ticket-list"></ul>
+        <a href="create-ticket.html">Create New Ticket</a>
+        <a href="#" onclick="logout()">Logout</a>
+    </div>
 
     <script>
         function loadTickets() {
@@ -29,7 +33,7 @@
                     const ticketList = $('#ticket-list');
                     ticketList.empty();
                     tickets.forEach(ticket => {
-                        if (ticket.createdId !== "") {   // must be excluded due to the default empty collections in Firestore for fields
+                        if (ticket.createdId !== "") {   // must be excluded due to the skeleton empty collections in Firestore
                             ticketList.append(`
                             <li>
                                 <a href="ticket-chat.html?id=${ticket.id}">
@@ -51,6 +55,18 @@
                 }
 
             });
+        }
+
+        function logout() {
+            try {
+                localStorage.removeItem('token');
+                localStorage.removeItem('userId');
+                localStorage.removeItem('username');
+            } catch (error) {
+                console.log("Unable to logout: " + error);
+                alert("Couldn't log out");
+            }
+            window.location.href = "/index.html";
         }
 
         $(document).ready(function () {

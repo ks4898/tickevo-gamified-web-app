@@ -3,6 +3,8 @@ const admin = require('firebase-admin');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+/*const redis = require('redis'); // NEED ADDITIONAL SET UP LATER FOR SESSION CHECK
+const redisClient = redis.createClient();*/
 const app = express();
 const port = 3000;
 
@@ -91,7 +93,8 @@ app.post('/api/create-ticket', verifyToken, async (req, res) => {
       stage: 'Unseen', // Unseen by def
       priority: priority || 'Normal', // Normal by def
       currentTurn: null, // no one's turn by def
-      queue: [] // empty turn que by def
+      queue: [], // empty turn que by def
+      viewedBy: [req.userId]
     });
     res.json({ success: true, ticketId: newTicket.id });
   } catch (error) {
@@ -136,40 +139,49 @@ app.get('/api/tickets/:ticketId', verifyToken, async (req, res) => {
     const currentTime = admin.firestore.Timestamp.now();
     const timeDiff = currentTime.seconds - ticket.lastUpdateDate.seconds;
 
-    // Add viewer to queue if not already present and not the creator
-    if (req.userId !== ticket.createdId && !ticket.queue.includes(req.userId)) {
+    // add user to viewedBy array if not already present
+    if (!ticket.viewedBy || !ticket.viewedBy.includes(req.userId)) {
+      await ticketRef.update({
+        viewedBy: admin.firestore.FieldValue.arrayUnion(req.userId)
+      });
+      ticket.viewedBy = ticket.viewedBy ? [...ticket.viewedBy, req.userId] : [req.userId];
+    }
+
+    // add creator to queue if ticket is not in Unseen or Pending Review stages and not already present, or other users if not already present
+    if ((ticket.createdId === req.userId && ticket.stage !== "Unseen" && ticket.stage !== "Pending Review" && !ticket.queue.includes(req.userId))
+      || (ticket.createdId !== req.userId && !ticket.queue.includes(req.userId))) {
       ticket.queue.push(req.userId);
       await ticketRef.update({ queue: ticket.queue });
     }
 
-    // Reset turn after 1 minute of inactivity
+    // reset turn after 1 minute of inactivity
     if (timeDiff > 60 && ticket.currentTurn) {
       let queue = ticket.queue || [];
       let nextTurn = null;
-      
+
       if (queue.length > 0) {
         nextTurn = queue.shift();
         queue.push(nextTurn);
       }
-      
+
       await ticketRef.update({
         currentTurn: nextTurn,
         queue: queue,
         lastUpdateDate: currentTime
       });
-      
+
       ticket.currentTurn = nextTurn;
       ticket.queue = queue;
       ticket.lastUpdateDate = currentTime;
     }
 
-    // Set turn if not set
+    // set turn if not set
     if (!ticket.currentTurn && ticket.queue.length > 0) {
       ticket.currentTurn = ticket.queue[0];
       await ticketRef.update({ currentTurn: ticket.currentTurn });
     }
 
-    // Update stage if necessary and viewer is not the creator
+    // update stage if necessary and viewer is not the creator
     if (ticket.stage === 'Unseen' && ticket.createdId !== req.userId) {
       await ticketRef.update({
         stage: 'Pending Review',
@@ -216,17 +228,17 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
   const ticketId = req.params.ticketId;
   try {
     const ticketRef = db.collection('tickets').doc(ticketId);
-    
+
     await db.runTransaction(async (transaction) => {
       const ticketDoc = await transaction.get(ticketRef);
       if (!ticketDoc.exists) {
         throw new Error('Ticket not found');
       }
       const ticketData = ticketDoc.data();
-      
-      // Check if it's the user's turn and not the creator in Unseen or Pending Review stages
-      if (ticketData.currentTurn !== req.userId || 
-         (ticketData.createdId === req.userId && 
+
+      // disallow sending message if it's not the user's turn or for the creator in Unseen or Pending Review stages
+      if (ticketData.currentTurn !== req.userId ||
+        (ticketData.createdId === req.userId &&
           (ticketData.stage === 'Unseen' || ticketData.stage === 'Pending Review'))) {
         throw new Error('Not allowed to send message');
       }
@@ -234,7 +246,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       const userDoc = await db.collection('users').doc(req.userId).get();
       const username = userDoc.data().username;
 
-      // Add message
+      // add message
       const messageRef = ticketRef.collection('messages').doc();
       transaction.set(messageRef, {
         userId: req.userId,
@@ -243,25 +255,34 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // Update stage if necessary
+      // update stage if necessary
       if (ticketData.stage === 'Pending Review' && ticketData.createdId !== req.userId) {
-        transaction.update(ticketRef, { 
+        transaction.update(ticketRef, {
           stage: 'Under Review',
           lastUpdateDate: admin.firestore.FieldValue.serverTimestamp()
         });
       }
 
-      // Update turn
+      // update turn
       let queue = ticketData.queue || [];
       queue = queue.filter(id => id !== req.userId);
       let nextTurn = null;
-      
+
       if (queue.length > 0) {
-        nextTurn = queue[0];
-      } else {
-        // Add all users including creator to queue
+        // filter queue to only include users who have viewed the ticket
+        queue = queue.filter(id => ticketData.viewedBy.includes(id));
+        if (queue.length > 0) {
+          nextTurn = queue[0];
+        }
+      }
+
+      if (!nextTurn || queue.length === 0) {
+        // if queue is empty or no viewers are in queue, add all users who have viewed the ticket
         const allUsers = await db.collection('users').get();
-        queue = allUsers.docs.map(doc => doc.id).filter(id => id !== req.userId);
+        queue = allUsers.docs
+          .filter(doc => doc.data().username !== '') // exclude skeleton user
+          .map(doc => doc.id)
+          .filter(id => id !== req.userId && ticketData.viewedBy.includes(id));
         if (queue.length > 0) {
           nextTurn = queue[0];
         }
