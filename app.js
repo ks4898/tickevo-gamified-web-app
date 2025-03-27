@@ -224,11 +224,8 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       }
       const ticketData = ticketDoc.data();
       
-      // Check if it's the user's turn and not the creator in Unseen or Pending Review stages
-      if (ticketData.currentTurn !== req.userId || 
-         (ticketData.createdId === req.userId && 
-          (ticketData.stage === 'Unseen' || ticketData.stage === 'Pending Review'))) {
-        throw new Error('Not allowed to send message');
+      if (ticketData.currentTurn !== req.userId) {
+        throw new Error('Not your turn');
       }
 
       const userDoc = await db.collection('users').doc(req.userId).get();
@@ -258,12 +255,11 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
       
       if (queue.length > 0) {
         nextTurn = queue[0];
-      } else if (ticketData.createdId !== req.userId) {
-        nextTurn = ticketData.createdId;
-        queue.push(ticketData.createdId);
-      }
-
-      if (nextTurn === null && queue.length > 0) {
+      } else if (ticketData.stage !== 'Unseen' && ticketData.stage !== 'Pending Review') {
+        // Add creator to queue if not already present
+        if (!queue.includes(ticketData.createdId)) {
+          queue.push(ticketData.createdId);
+        }
         nextTurn = queue[0];
       }
 
