@@ -265,7 +265,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
 
       // update turn
       let queue = ticketData.queue || [];
-      queue = queue.filter(id => id !== req.userId);
+      queue = queue.filter(id => id !== req.userId); // exclude the current user
       let nextTurn = null;
 
       if (queue.length > 0) {
@@ -280,7 +280,7 @@ app.post('/api/tickets/:ticketId/messages', verifyToken, async (req, res) => {
         // if queue is empty or no viewers are in queue, add all users who have viewed the ticket
         const allUsers = await db.collection('users').get();
         queue = allUsers.docs
-          .filter(doc => doc.data().username !== '') // exclude skeleton user
+          .filter(doc => doc.data().username !== '') // exclude skeleton (empty) users
           .map(doc => doc.id)
           .filter(id => id !== req.userId && ticketData.viewedBy.includes(id));
         if (queue.length > 0) {

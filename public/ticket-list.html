@@ -33,7 +33,7 @@
                     const ticketList = $('#ticket-list');
                     ticketList.empty();
                     tickets.forEach(ticket => {
-                        if (ticket.createdId !== "") {   // must be excluded due to the skeleton empty collections in Firestore
+                        if (ticket.createdId !== "") {   // must be excluded due to the skeleton (empty) collections in Firestore
                             ticketList.append(`
                             <li>
                                 <a href="ticket-chat.html?id=${ticket.id}">
