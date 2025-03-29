@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // init Firebase admin SDK
-const serviceAccount = require('./tickevo-ticket-evolution-firebase-adminsdk-fbsvc-6e628ddddb.json');
+const serviceAccount = require('./tickevo-ticket-evolution-firebase-adminsdk-fbsvc-7930e23cd8.json');
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
